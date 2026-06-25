@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Markdown 轉 PDF 線上轉換工具 — 專業文件轉換平台</title>
+  <meta name="description" content="一個純前端的 Markdown 轉 PDF 線上轉換工具。支援即時預覽、向量公式渲染、安全且高效，無需上傳伺服器。">
+  
+  <!-- 引入 Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- 引入 Marked.js (Markdown 解析器) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
+  
+  <!-- 引入 KaTeX (數學公式即時渲染) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+
+  <style>
+    :root {
+      --bg-primary: #f8fafc;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #f1f5f9;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
+      --accent-primary: #2563eb;
+      --accent-secondary: #7c3aed;
+      --accent-gradient: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+      --accent-gradient-hover: linear-gradient(135deg, #1d4ed8 0%, #6d28d9 100%);
+      --border-color: #e2e8f0;
+      --border-focus: #94a3b8;
+      --success: #10b981;
+      --error: #ef4444;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --font-sans: 'Outfit', 'Inter', 'Noto Sans TC', sans-serif;
+      --transition-base: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    /* 頂部導覽列 */
+    header {
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 1.25rem 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .header-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.5rem;
+      font-weight: 800;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.05em;
+    }
+
+    .logo svg {
+      width: 32px;
+      height: 32px;
+      stroke: url(#logo-grad);
+      fill: none;
+    }
+
+    /* 導航連結 */
+    .nav-links {
+      display: flex;
+      gap: 1.5rem;
+      align-items: center;
+    }
+
+    .nav-item {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius-sm);
+      transition: var(--transition-base);
+    }
+
+    .nav-item:hover {
+      color: var(--text-primary);
+      background: var(--bg-tertiary);
+    }
+
+    .nav-item.active {
+      color: var(--accent-primary);
+      background: rgba(37, 99, 235, 0.08);
+    }
+
+    .header-badge {
+      background: rgba(37, 99, 235, 0.08);
+      border: 1px solid rgba(37, 99, 235, 0.15);
+      color: var(--accent-primary);
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* 主容器 */
+    main {
+      flex: 1;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* 說明橫幅 */
+    .hero-banner {
+      text-align: center;
+      padding: 2.5rem 1.5rem;
+      background: radial-gradient(circle at 50% 50%, rgba(124, 58, 237, 0.04) 0%, transparent 75%), var(--bg-secondary);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-color);
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.025);
+    }
+
+    .hero-banner h1 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      margin-bottom: 0.75rem;
+      letter-spacing: -0.02em;
+    }
+
+    .hero-banner p {
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* 提示設定資訊方框 */
+    .pdf-hint-panel {
+      background: rgba(37, 99, 235, 0.03);
+      border: 1px solid rgba(37, 99, 235, 0.15);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+    }
+
+    .pdf-hint-title {
+      font-weight: 700;
+      color: var(--accent-primary);
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .pdf-hint-list {
+      list-style-type: none;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .pdf-hint-list li {
+      position: relative;
+      padding-left: 1.25rem;
+    }
+
+    .pdf-hint-list li::before {
+      content: "•";
+      color: var(--accent-primary);
+      font-weight: bold;
+      position: absolute;
+      left: 0;
+    }
+
+    /* 工具控制列 */
+    .control-panel {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .control-group-left {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .control-group-right {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    /* 按鈕樣式 */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.25rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: var(--transition-base);
+      border: 1px solid transparent;
+      outline: none;
+    }
+
+    .btn-primary {
+      background: var(--accent-gradient);
+      color: #ffffff;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.2);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-gradient-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.3);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      border-color: var(--border-color);
+      color: var(--text-primary);
+    }
+
+    .btn-secondary:hover {
+      background: #e2e8f0;
+      border-color: var(--border-focus);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border-color: var(--border-color);
+      color: var(--text-secondary);
+    }
+
+    .btn-outline:hover {
+      color: var(--text-primary);
+      border-color: var(--border-focus);
+      background: rgba(0, 0, 0, 0.02);
+    }
+
+    /* 輸入框 */
+    .input-text {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+      border-radius: var(--radius-sm);
+      outline: none;
+      transition: var(--transition-base);
+      font-family: var(--font-sans);
+    }
+
+    .input-text:focus {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+
+    /* 隱藏的原生檔案上傳 */
+    .file-input {
+      display: none;
+    }
+
+    /* 工作區：左右分欄 */
+    .workspace {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      flex: 1;
+      min-height: 500px;
+    }
+
+    .panel-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+    }
+
+    .panel-header {
+      padding: 1rem 1.25rem;
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .panel-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* 編輯器 Area */
+    .editor-textarea {
+      width: 100%;
+      height: 100%;
+      min-height: 450px;
+      flex: 1;
+      background: transparent;
+      border: none;
+      resize: none;
+      outline: none;
+      padding: 1.5rem;
+      color: var(--text-primary);
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 1rem;
+      line-height: 1.6;
+    }
+
+    /* 預覽區 */
+    .preview-container {
+      padding: 2rem;
+      overflow-y: auto;
+      height: 100%;
+      max-height: 600px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+
+    /* Markdown 樣式渲染 */
+    .markdown-body {
+      font-size: 1rem;
+      line-height: 1.7;
+      word-wrap: break-word;
+    }
+
+    .markdown-body > *:first-child {
+      margin-top: 0 !important;
+    }
+
+    .markdown-body h1, 
+    .markdown-body h2, 
+    .markdown-body h3, 
+    .markdown-body h4, 
+    .markdown-body h5, 
+    .markdown-body h6 {
+      margin-top: 1.5rem;
+      margin-bottom: 1rem;
+      font-weight: 700;
+      line-height: 1.25;
+      color: var(--text-primary);
+    }
+
+    .markdown-body h1 { font-size: 1.8rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em; }
+    .markdown-body h2 { font-size: 1.4rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em; }
+    .markdown-body h3 { font-size: 1.2rem; }
+    
+    .markdown-body p, 
+    .markdown-body blockquote, 
+    .markdown-body ul, 
+    .markdown-body ol, 
+    .markdown-body dl, 
+    .markdown-body table, 
+    .markdown-body pre {
+      margin-top: 0;
+      margin-bottom: 1rem;
+    }
+
+    .markdown-body a {
+      color: var(--accent-primary);
+      text-decoration: none;
+    }
+
+    .markdown-body a:hover {
+      text-decoration: underline;
+    }
+
+    .markdown-body blockquote {
+      padding: 0 1em;
+      color: var(--text-secondary);
+      border-left: 0.25em solid var(--accent-secondary);
+      background: rgba(124, 58, 237, 0.04);
+      border-radius: 0 4px 4px 0;
+      padding: 0.5rem 1rem;
+    }
+
+    .markdown-body ul, 
+    .markdown-body ol {
+      padding-left: 2em;
+    }
+
+    .markdown-body li {
+      margin-top: 0.25em;
+    }
+
+    .markdown-body code {
+      padding: 0.2em 0.4em;
+      margin: 0;
+      font-size: 85%;
+      background-color: var(--bg-tertiary);
+      border-radius: 6px;
+      font-family: monospace;
+      color: #db2777;
+    }
+
+    .markdown-body pre {
+      padding: 1rem;
+      overflow: auto;
+      font-size: 85%;
+      line-height: 1.45;
+      background-color: var(--bg-primary);
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .markdown-body pre code {
+      background-color: transparent;
+      padding: 0;
+      color: var(--text-primary);
+      font-size: 100%;
+    }
+
+    .markdown-body table {
+      border-spacing: 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow: auto;
+    }
+
+    .markdown-body table th {
+      font-weight: 600;
+      background-color: var(--bg-tertiary);
+    }
+
+    .markdown-body table th, 
+    .markdown-body table td {
+      padding: 6px 13px;
+      border: 1px solid var(--border-color);
+    }
+
+    .markdown-body table tr {
+      background-color: var(--bg-secondary);
+    }
+
+    .markdown-body table tr:nth-child(2n) {
+      background-color: var(--bg-primary);
+    }
+
+    .markdown-body hr {
+      height: 0.25em;
+      padding: 0;
+      margin: 1.5rem 0;
+      background-color: var(--border-color);
+      border: 0;
+    }
+
+    /* 頁尾 */
+    footer {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      padding: 1.5rem 2rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: auto;
+    }
+
+    .footer-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    /* 讀取狀態遮罩與 Spinner */
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+      opacity: 0;
+      pointer-events: none;
+      transition: var(--transition-base);
+    }
+
+    .loading-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(37, 99, 235, 0.1);
+      border-left-color: var(--accent-primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* 自訂通知 (Toast) */
+    .toast-container {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .toast {
+      background: var(--bg-secondary);
+      border-left: 4px solid var(--accent-primary);
+      border-top: 1px solid var(--border-color);
+      border-right: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 1rem 1.5rem;
+      border-radius: 6px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      transform: translateX(120%);
+      transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      font-size: 0.9rem;
+    }
+
+    .toast.show {
+      transform: translateX(0);
+    }
+
+    .toast.success {
+      border-left-color: var(--success);
+    }
+
+    .toast.error {
+      border-left-color: var(--error);
+    }
+
+    /* 響應式排版 */
+    @media (max-width: 1024px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+      .editor-textarea {
+        min-height: 350px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      main {
+        padding: 1rem;
+      }
+      .control-panel {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .control-group-left, .control-group-right {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .pdf-hint-list {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* 針對列印模式 (@media print) 的高度最佳化設定 */
+    @media print {
+      /* 隱藏網頁上所有與文件內容無關的 UI 元素 */
+      header, 
+      footer, 
+      .hero-banner, 
+      .pdf-hint-panel, 
+      .control-panel, 
+      .panel-header, 
+      .editor-textarea, 
+      .toast-container, 
+      .loading-overlay, 
+      .workspace > .panel-card:first-child {
+        display: none !important;
+      }
+
+      /* 鋪滿列印頁面，移除頁面背景色 */
+      body {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+
+      main {
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+
+      .workspace {
+        display: block !important;
+      }
+
+      /* 取消卡片外框、圓角與陰影 */
+      .panel-card {
+        border: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+      }
+
+      .preview-container {
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: visible !important;
+        max-height: none !important;
+        height: auto !important;
+        background: transparent !important;
+        color: #000000 !important;
+      }
+
+      /* 保留背景圖形 (如表格斑馬條紋、代碼塊底色) */
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SVG Logo Gradient -->
+  <svg style="display: none;">
+    <defs>
+      <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#3b82f6" />
+        <stop offset="100%" stop-color="#8b5cf6" />
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <header class="no-print">
+    <div class="header-container">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        <span>MarkWord</span>
+      </div>
+      
+      <nav class="nav-links">
+        <a href="index.html" class="nav-item">Markdown 轉 Word</a>
+        <a href="markdown-to-html.html" class="nav-item">Markdown 轉 HTML</a>
+        <a href="markdown-to-pdf.html" class="nav-item active">Markdown 轉 PDF</a>
+      </nav>
+
+      <div class="header-badge">瀏覽器端轉換</div>
+    </div>
+  </header>
+
+  <main>
+    <!-- 說明區 -->
+    <section class="hero-banner no-print">
+      <h1>Markdown 轉 PDF 線上轉換工具</h1>
+      <p>在瀏覽器端將 Markdown 格式即時解析並導出為 PDF 文件。支援向量級 KaTeX 數學公式與語法高亮，保護您的隱私安全。</p>
+    </section>
+
+    <!-- 提示建議資訊方框 -->
+    <section class="pdf-hint-panel no-print">
+      <div class="pdf-hint-title">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        另存為 PDF 建議設定說明：
+      </div>
+      <ul class="pdf-hint-list">
+        <li><strong>目的地選擇</strong>：請於系統列印視窗中將目的地設為<strong>「另存為 PDF」</strong>。</li>
+        <li><strong>啟用背景圖形</strong>：展開「更多設定」，並<strong>勾選「背景圖形」</strong>以保留表格間色、按鈕與代碼區塊背景色。</li>
+        <li><strong>取消頁首和頁尾</strong>：建議<strong>取消勾選「頁首和頁尾」</strong>以移除網頁網址與列印日期，使文件更為精緻專業。</li>
+      </ul>
+    </section>
+
+    <!-- 控制區 -->
+    <section class="control-panel no-print">
+      <div class="control-group-left">
+        <!-- 檔案上傳 -->
+        <input type="file" id="file-upload" class="file-input" accept=".md,.markdown,.txt">
+        <button class="btn btn-secondary" onclick="document.getElementById('file-upload').click()">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+          </svg>
+          匯入 Markdown 檔案
+        </button>
+        
+        <!-- 預設範例 -->
+        <button class="btn btn-outline" id="btn-example">載入預設範例</button>
+        <!-- 清除按鈕 -->
+        <button class="btn btn-outline" id="btn-clear">清空內容</button>
+      </div>
+
+      <div class="control-group-right">
+        <!-- 輸出檔名 -->
+        <input type="text" id="filename-input" class="input-text" placeholder="輸出檔案名稱" value="我的轉換文件">
+
+        <!-- 導出 PDF 按鈕 -->
+        <button class="btn btn-primary" id="btn-export-pdf" title="將文件轉換並列印下載為 PDF 檔案 (.pdf)">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+          </svg>
+          導出為 PDF 檔案 (.pdf)
+        </button>
+      </div>
+    </section>
+
+    <!-- 工作區 -->
+    <section class="workspace">
+      <!-- 編輯面板 -->
+      <div class="panel-card">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+            </svg>
+            Markdown 編輯區
+          </div>
+          <span style="font-size: 0.8rem; color: var(--text-muted);" id="char-count">字數: 0</span>
+        </div>
+        <div class="panel-body">
+          <textarea id="markdown-editor" class="editor-textarea" placeholder="在此輸入您的 Markdown 內容..."></textarea>
+        </div>
+      </div>
+
+      <!-- 預覽面板 -->
+      <div class="panel-card" style="position: relative;">
+        <!-- 載入中遮罩 -->
+        <div id="loading-overlay" class="loading-overlay">
+          <div class="spinner"></div>
+        </div>
+        
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+            即時預覽區
+          </div>
+        </div>
+        
+        <div class="panel-body">
+          <div id="html-preview" class="preview-container markdown-body">
+            <!-- 預覽內容 -->
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 浮動通知容器 -->
+  <div class="toast-container no-print" id="toast-container"></div>
+
+  <footer class="no-print">
+    <div class="footer-container">
+      <p>&copy; 2026 MarkWord 線上轉換工具. All rights reserved.</p>
+      <p>本系統使用 marked.js 解析 Markdown 語法，並整合 KaTeX 進行科學方程式渲染。支援高品質、支援選取文字與向量數學公式的 PDF 匯出。</p>
+    </div>
+  </footer>
+
+  <script>
+    // 預設範例內容
+    const sampleMarkdown = `# 歡迎使用 MarkWord 轉換工具！
+
+這是一個**純前端**的 Markdown 轉 Word 檔案轉換工具。您在此處輸入的任何內容都**不會**上傳到伺服器，完全在您的瀏覽器中本地處理，隱私安全無虞。
+
+## 主要特色功能
+
+1. **即時編輯預覽** — 左側輸入 Markdown，右側立即顯示排版效果（包含數學公式與特殊符號）。
+2. **匯入現有檔案** — 支援匯入 \`.md\` 或是 \`.txt\` 格式的檔案進行轉換。
+3. **優雅的排版** — 自動將 Markdown 轉換成帶有微調樣式的 Word 檔，方便於後續編輯。
+
+---
+
+## 支援的常見語法範例
+
+### 1. 數學公式與特殊符號
+
+本工具支援標準 LaTeX 數學公式即時渲染：
+
+- **行內公式 (Inline Math)**：例如質能等價公式 $E = mc^2$，或者圓周率相關的 $\\pi \\approx 3.14159$。
+- **區塊公式 (Block Math)**：
+  $$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$
+  或是矩陣運算：
+  $$A = \\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$$
+- **常用特殊符號**：希臘字母 $\\alpha$, $\\beta$, $\\lambda$, $\\theta$，以及關係符號 $\\approx$, $\\neq$, $\\le$, $\\ge$, $\\infty$，與箭頭 $\\rightarrow$, $\\Rightarrow$。
+
+> **導出 Word 的數學公式說明**：
+> 導出的 Word 檔案會保留最乾淨的 LaTeX 原始碼（例如 \`$E = mc^2$\`），這能防止轉換時格式損壞。
+> **在 Microsoft Word 中轉換**：您只需選中公式文字，然後按下鍵盤快速鍵 \`Alt\` + \`=\`（在 macOS 上為 \`Option\` + \`=\`），Word 就會立刻自動將其轉換為漂亮的**原生 Word 公式物件**。
+
+### 2. 列表語法
+
+- 項目一：精緻的設計美學
+- 項目二：完全基於瀏覽器本地執行
+- 項目三：不留任何伺服器暫存紀錄
+
+### 3. 程式碼區塊
+
+您可以撰寫程式碼，它也會被適當轉換：
+
+\`\`\`javascript
+async function convertToDocx(htmlContent) {
+  // 將 HTML 轉換為 DOCX 的 Blob 檔案
+  const docxBlob = await window.docshift.toDocx(htmlContent);
+  return docxBlob;
+}
+\`\`\`
+
+### 4. 表格範例
+
+| 格式 | 支援度 | 說明 |
+| :--- | :---: | :--- |
+| **Markdown** | 100% | 採用 marked.js 解析 |
+| **Word (docx)** | 100% | 採用 docshift 引擎導出 |
+| **隱私安全** | 100% | 無任何伺服器交互 |
+
+### 5. 引用區塊
+
+> 「這是引用區塊的樣式，通常用於強調某些名言或是說明文件的背景脈絡。」 — 系統提示
+
+### 6. 格式化字元
+
+* *斜體字*
+* **粗體字**
+* ~~刪除線~~
+* \`單行程式碼\`
+
+---
+`;
+
+    // 取得 DOM 元素
+    const markdownEditor = document.getElementById('markdown-editor');
+    const htmlPreview = document.getElementById('html-preview');
+    const fileUpload = document.getElementById('file-upload');
+    const filenameInput = document.getElementById('filename-input');
+    const btnExportPdf = document.getElementById('btn-export-pdf');
+    const btnExample = document.getElementById('btn-example');
+    const btnClear = document.getElementById('btn-clear');
+    const charCount = document.getElementById('char-count');
+    const loadingOverlay = document.getElementById('loading-overlay');
+
+    // 初始化設定
+    window.addEventListener('DOMContentLoaded', () => {
+      // 載入預設範例
+      markdownEditor.value = sampleMarkdown;
+      updatePreview();
+    });
+
+    // 編輯器輸入事件
+    markdownEditor.addEventListener('input', () => {
+      updatePreview();
+    });
+
+    // 解析並更新預覽
+    function updatePreview() {
+      const markdownText = markdownEditor.value;
+      
+      // 更新字數統計
+      charCount.textContent = `字數: ${markdownText.length}`;
+      
+      try {
+        // 使用 marked.parse 將 Markdown 轉為 HTML
+        const html = marked.parse(markdownText);
+        htmlPreview.innerHTML = html;
+
+        // 渲染數學公式 (KaTeX)
+        if (typeof renderMathInElement === 'function') {
+          renderMathInElement(htmlPreview, {
+            delimiters: [
+              { left: '$$', right: '$$', display: true },
+              { left: '$', right: '$', display: false },
+              { left: '\\(', right: '\\)', display: false },
+              { left: '\\[', right: '\\[', display: true }
+            ],
+            throwOnError: false
+          });
+        }
+      } catch (error) {
+        console.error('Markdown 解析錯誤:', error);
+        htmlPreview.innerHTML = `<span style="color: var(--error);">解析錯誤: ${error.message}</span>`;
+      }
+    }
+
+    // 載入範例按鈕事件
+    btnExample.addEventListener('click', () => {
+      markdownEditor.value = sampleMarkdown;
+      updatePreview();
+      showToast('已載入預設範例！', 'success');
+    });
+
+    // 清空內容按鈕事件
+    btnClear.addEventListener('click', () => {
+      markdownEditor.value = '';
+      updatePreview();
+      showToast('內容已清空', 'success');
+    });
+
+    // 處理檔案上傳匯入
+    fileUpload.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        markdownEditor.value = e.target.result;
+        updatePreview();
+        
+        // 自動帶入檔案名稱（去除副檔名）
+        const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+        filenameInput.value = nameWithoutExt;
+        
+        showToast(`成功匯入檔案: ${file.name}`, 'success');
+      };
+      
+      reader.onerror = (err) => {
+        showToast('檔案讀取失敗，請重新嘗試。', 'error');
+        console.error(err);
+      };
+
+      reader.readAsText(file);
+      fileUpload.value = '';
+    });
+
+    // 導出 PDF 按鈕事件 (觸發 window.print)
+    btnExportPdf.addEventListener('click', () => {
+      const markdownText = markdownEditor.value.trim();
+      
+      if (!markdownText) {
+        showToast('請先輸入或匯入一些 Markdown 內容再進行轉換。', 'error');
+        return;
+      }
+
+      let filename = filenameInput.value.trim();
+      if (!filename) {
+        filename = '我的轉換文件';
+      }
+
+      // 動態將網頁標題設為檔名，這樣瀏覽器列印另存成 PDF 的預設檔名即為該標題
+      const originalTitle = document.title;
+      document.title = filename;
+
+      showToast('正在開啟列印視窗，請將目的地選擇為「另存為 PDF」...', 'success');
+
+      // 微小延遲確保 toast 通知已顯示
+      setTimeout(() => {
+        window.print();
+        // 列印視窗關閉後，將 document.title 還原
+        document.title = originalTitle;
+      }, 500);
+    });
+
+    // 顯示自訂 Toast 通知
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      
+      let icon = '';
+      if (type === 'success') {
+        icon = `
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color: var(--success);">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        `;
+      } else {
+        icon = `
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color: var(--error);">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+        `;
+      }
+
+      toast.innerHTML = `
+        ${icon}
+        <span>${message}</span>
+      `;
+      
+      container.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.classList.add('show');
+      }, 50);
+
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+          container.removeChild(toast);
+        }, 300);
+      }, 3500);
+    }
+  </script>
+</body>
+</html>

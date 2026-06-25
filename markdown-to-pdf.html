@@ -20,6 +20,10 @@
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
 
   <style>
+    html {
+      font-size: clamp(14px, 0.95vw, 16px);
+    }
+
     :root {
       --bg-primary: #f8fafc;
       --bg-secondary: #ffffff;
@@ -320,11 +324,55 @@
 
     /* 工作區：左右分欄 */
     .workspace {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.5rem;
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      gap: 0;
       flex: 1;
       min-height: 500px;
+      position: relative;
+    }
+
+    .workspace > .panel-card {
+      min-width: 250px;
+    }
+
+    /* 拖曳分割線 */
+    .workspace-splitter {
+      width: 12px;
+      margin: 0 -2px;
+      background: transparent;
+      cursor: col-resize;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition-base);
+      user-select: none;
+      position: relative;
+      z-index: 10;
+      flex-shrink: 0;
+    }
+
+    .workspace-splitter:hover,
+    .workspace-splitter.dragging {
+      background: rgba(37, 99, 235, 0.08);
+    }
+
+    .workspace-splitter::after {
+      content: "";
+      width: 2px;
+      height: 32px;
+      background: var(--border-focus);
+      border-radius: 1px;
+      transition: var(--transition-base);
+      opacity: 0.6;
+    }
+
+    .workspace-splitter:hover::after,
+    .workspace-splitter.dragging::after {
+      background: var(--accent-primary);
+      height: 48px;
+      opacity: 1;
     }
 
     .panel-card {
@@ -389,7 +437,7 @@
       max-height: 600px;
       background: var(--bg-secondary);
       color: var(--text-primary);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-family: var(--font-sans);
     }
 
     /* Markdown 樣式渲染 */
@@ -617,7 +665,14 @@
     /* 響應式排版 */
     @media (max-width: 1024px) {
       .workspace {
-        grid-template-columns: 1fr;
+        flex-direction: column;
+      }
+      .workspace > .panel-card {
+        width: 100% !important;
+        min-height: 350px;
+      }
+      .workspace-splitter {
+        display: none !important;
       }
       .editor-textarea {
         min-height: 350px;
@@ -653,6 +708,7 @@
       .editor-textarea, 
       .toast-container, 
       .loading-overlay, 
+      .workspace-splitter,
       .workspace > .panel-card:first-child {
         display: none !important;
       }
@@ -796,7 +852,7 @@
     <!-- 工作區 -->
     <section class="workspace">
       <!-- 編輯面板 -->
-      <div class="panel-card">
+      <div class="panel-card" id="editor-card" style="width: calc(50% - 6px); flex: 0 0 auto;">
         <div class="panel-header">
           <div class="panel-title">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -811,8 +867,11 @@
         </div>
       </div>
 
+      <!-- 拖曳分割線 -->
+      <div class="workspace-splitter" id="workspace-splitter"></div>
+
       <!-- 預覽面板 -->
-      <div class="panel-card" style="position: relative;">
+      <div class="panel-card" id="preview-card" style="position: relative; flex: 1 1 0%; min-width: 250px;">
         <!-- 載入中遮罩 -->
         <div id="loading-overlay" class="loading-overlay">
           <div class="spinner"></div>
@@ -1078,6 +1137,78 @@ async function convertToDocx(htmlContent) {
         }, 300);
       }, 3500);
     }
+
+    // 實作左右拖曳大小功能 (Splitter)
+    const splitter = document.getElementById('workspace-splitter');
+    const editorCard = document.getElementById('editor-card');
+    const workspace = splitter.parentElement;
+
+    let isDragging = false;
+
+    splitter.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      splitter.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.body.style.webkitUserSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+
+      const workspaceRect = workspace.getBoundingClientRect();
+      let newWidth = e.clientX - workspaceRect.left;
+
+      const minWidth = 250;
+      const maxWidth = workspaceRect.width - 250;
+
+      if (newWidth < minWidth) newWidth = minWidth;
+      if (newWidth > maxWidth) newWidth = maxWidth;
+
+      editorCard.style.width = `${newWidth}px`;
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        splitter.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.body.style.webkitUserSelect = '';
+      }
+    });
+
+    // 觸控裝置支援
+    splitter.addEventListener('touchstart', (e) => {
+      isDragging = true;
+      splitter.classList.add('dragging');
+      document.body.style.userSelect = 'none';
+      document.body.style.webkitUserSelect = 'none';
+    });
+
+    document.addEventListener('touchmove', (e) => {
+      if (!isDragging) return;
+      const touch = e.touches[0];
+      const workspaceRect = workspace.getBoundingClientRect();
+      let newWidth = touch.clientX - workspaceRect.left;
+
+      const minWidth = 250;
+      const maxWidth = workspaceRect.width - 250;
+
+      if (newWidth < minWidth) newWidth = minWidth;
+      if (newWidth > maxWidth) newWidth = maxWidth;
+
+      editorCard.style.width = `${newWidth}px`;
+    });
+
+    document.addEventListener('touchend', () => {
+      if (isDragging) {
+        isDragging = false;
+        splitter.classList.remove('dragging');
+        document.body.style.userSelect = '';
+        document.body.style.webkitUserSelect = '';
+      }
+    });
   </script>
 </body>
 </html>

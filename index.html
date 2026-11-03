@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Markdown 轉 Word 線上轉換工具 — 專業文件轉換平台</title>
-  <meta name="description" content="一個純前端的 Markdown 轉 Word (.docx) 線上轉換工具。支援即時預覽、自訂樣式導出、檔案匯入，無需上傳伺服器，安全且高效。">
+  <title>MarkWord — Markdown 轉 Word / HTML / PDF 線上轉換工具</title>
+  <meta name="description" content="一個純前端的 Markdown 轉 Word (.doc)、HTML 與 PDF 線上轉換工具。支援即時預覽、KaTeX 數學公式渲染、檔案匯入，無需上傳伺服器，安全且高效。">
   
   <!-- 引入 Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,6 +13,9 @@
   
   <!-- 引入 Marked.js (Markdown 解析器) -->
   <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
+
+  <!-- 引入 DOMPurify (防範 XSS 攻擊) -->
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
 
   <!-- 引入 KaTeX (數學公式即時渲染) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
@@ -43,7 +46,7 @@
       --radius-md: 12px;
       --radius-lg: 16px;
       --font-sans: 'Outfit', 'Inter', 'Noto Sans TC', sans-serif;
-      --transition-base: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-base: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     * {
@@ -63,13 +66,17 @@
       line-height: 1.6;
     }
 
+    .hidden {
+      display: none !important;
+    }
+
     /* 頂部導覽列 */
     header {
-      background: rgba(255, 255, 255, 0.8);
+      background: rgba(255, 255, 255, 0.85);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border-color);
-      padding: 1.25rem 2rem;
+      padding: 1.15rem 2rem;
       position: sticky;
       top: 0;
       z-index: 50;
@@ -81,6 +88,8 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
     }
 
     .logo {
@@ -93,6 +102,7 @@
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       letter-spacing: -0.05em;
+      cursor: pointer;
     }
 
     .logo svg {
@@ -114,31 +124,39 @@
       letter-spacing: 0.05em;
     }
 
-    /* 導航連結 */
+    /* 導航連結 (SPA 模式切換器) */
     .nav-links {
       display: flex;
-      gap: 1.5rem;
+      gap: 0.5rem;
       align-items: center;
+      background: var(--bg-tertiary);
+      padding: 0.35rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
     }
 
     .nav-item {
       color: var(--text-secondary);
       text-decoration: none;
-      font-size: 0.95rem;
+      font-size: 0.92rem;
       font-weight: 600;
-      padding: 0.5rem 1rem;
+      padding: 0.5rem 1.1rem;
       border-radius: var(--radius-sm);
       transition: var(--transition-base);
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      font-family: var(--font-sans);
     }
 
     .nav-item:hover {
       color: var(--text-primary);
-      background: var(--bg-tertiary);
     }
 
     .nav-item.active {
       color: var(--accent-primary);
-      background: rgba(37, 99, 235, 0.08);
+      background: var(--bg-secondary);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
     }
 
     /* 主容器 */
@@ -147,36 +165,75 @@
       max-width: 1400px;
       width: 100%;
       margin: 0 auto;
-      padding: 2rem;
+      padding: 1.75rem 2rem;
       display: flex;
       flex-direction: column;
-      gap: 1.5rem;
+      gap: 1.25rem;
     }
 
     /* 說明橫幅 */
     .hero-banner {
       text-align: center;
-      padding: 2.5rem 1.5rem;
+      padding: 2rem 1.5rem;
       background: radial-gradient(circle at 50% 50%, rgba(124, 58, 237, 0.04) 0%, transparent 75%), var(--bg-secondary);
       border-radius: var(--radius-lg);
       border: 1px solid var(--border-color);
       position: relative;
       overflow: hidden;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.025);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
     }
 
     .hero-banner h1 {
-      font-size: 2.5rem;
+      font-size: 2.25rem;
       font-weight: 800;
-      margin-bottom: 0.75rem;
+      margin-bottom: 0.5rem;
       letter-spacing: -0.02em;
     }
 
     .hero-banner p {
       color: var(--text-secondary);
-      font-size: 1.1rem;
-      max-width: 600px;
+      font-size: 1.05rem;
+      max-width: 680px;
       margin: 0 auto;
+    }
+
+    /* PDF 提示設定資訊方框 */
+    .pdf-hint-panel {
+      background: rgba(37, 99, 235, 0.03);
+      border: 1px solid rgba(37, 99, 235, 0.15);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+    }
+
+    .pdf-hint-title {
+      font-weight: 700;
+      color: var(--accent-primary);
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .pdf-hint-list {
+      list-style-type: none;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .pdf-hint-list li {
+      position: relative;
+      padding-left: 1.25rem;
+    }
+
+    .pdf-hint-list li::before {
+      content: "•";
+      color: var(--accent-primary);
+      font-weight: bold;
+      position: absolute;
+      left: 0;
     }
 
     /* 工具控制列 */
@@ -184,7 +241,7 @@
       background: var(--bg-secondary);
       border: 1px solid var(--border-color);
       border-radius: var(--radius-md);
-      padding: 1.25rem;
+      padding: 1.15rem 1.25rem;
       display: flex;
       flex-wrap: wrap;
       gap: 1rem;
@@ -195,12 +252,13 @@
     .control-group-left {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.75rem;
+      gap: 0.65rem;
       align-items: center;
     }
 
     .control-group-right {
       display: flex;
+      flex-wrap: wrap;
       gap: 0.75rem;
       align-items: center;
     }
@@ -211,7 +269,7 @@
       align-items: center;
       justify-content: center;
       gap: 0.5rem;
-      padding: 0.75rem 1.25rem;
+      padding: 0.68rem 1.15rem;
       font-size: 0.9rem;
       font-weight: 600;
       border-radius: var(--radius-sm);
@@ -219,18 +277,26 @@
       transition: var(--transition-base);
       border: 1px solid transparent;
       outline: none;
+      font-family: var(--font-sans);
+    }
+
+    .btn-sm {
+      padding: 0.35rem 0.7rem;
+      font-size: 0.8rem;
+      border-radius: 6px;
+      gap: 0.35rem;
     }
 
     .btn-primary {
       background: var(--accent-gradient);
       color: #ffffff;
-      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
     }
 
     .btn-primary:hover {
       background: var(--accent-gradient-hover);
       transform: translateY(-1px);
-      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
     }
 
     .btn-primary:active {
@@ -244,7 +310,7 @@
     }
 
     .btn-secondary:hover {
-      background: #2a3352;
+      background: #e2e8f0;
       border-color: var(--border-focus);
     }
 
@@ -257,25 +323,82 @@
     .btn-outline:hover {
       color: var(--text-primary);
       border-color: var(--border-focus);
-      background: rgba(255, 255, 255, 0.02);
+      background: rgba(15, 23, 42, 0.03);
     }
 
-    /* 輸入框 */
+    .btn-undo {
+      background: rgba(37, 99, 235, 0.06);
+      border-color: rgba(37, 99, 235, 0.25);
+      color: var(--accent-primary);
+    }
+
+    .btn-undo:hover {
+      background: rgba(37, 99, 235, 0.12);
+      border-color: var(--accent-primary);
+    }
+
+    /* 複合式檔名輸入框群組 */
+    .filename-group {
+      display: inline-flex;
+      align-items: stretch;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      transition: var(--transition-base);
+    }
+
+    .filename-group:focus-within {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+      background: var(--bg-secondary);
+    }
+
+    .filename-prefix {
+      display: inline-flex;
+      align-items: center;
+      padding: 0 0.65rem 0 0.85rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .filename-group .input-text {
+      border: none;
+      background: transparent;
+      padding: 0.65rem 0.4rem;
+      width: 155px;
+      border-radius: 0;
+      box-shadow: none !important;
+      font-weight: 500;
+    }
+
+    .filename-ext {
+      display: inline-flex;
+      align-items: center;
+      padding: 0 0.8rem;
+      background: #e2e8f0;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      font-weight: 700;
+      font-family: 'Courier New', Courier, monospace;
+      border-left: 1px solid var(--border-color);
+      user-select: none;
+    }
+
+    /* 輸入框基礎 */
     .input-text {
       background: var(--bg-tertiary);
       border: 1px solid var(--border-color);
       color: var(--text-primary);
-      padding: 0.75rem 1rem;
+      padding: 0.68rem 1rem;
       font-size: 0.9rem;
       border-radius: var(--radius-sm);
       outline: none;
       transition: var(--transition-base);
       font-family: var(--font-sans);
-    }
-
-    .input-text:focus {
-      border-color: var(--accent-primary);
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
     }
 
     /* 隱藏的原生檔案上傳 */
@@ -290,7 +413,7 @@
       align-items: stretch;
       gap: 0;
       flex: 1;
-      min-height: 500px;
+      min-height: 520px;
       position: relative;
     }
 
@@ -343,27 +466,42 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.04), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .panel-card.drag-over {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
     }
 
     .panel-header {
-      padding: 1rem 1.25rem;
+      padding: 0.75rem 1.15rem;
       background: var(--bg-tertiary);
       border-bottom: 1px solid var(--border-color);
       display: flex;
       justify-content: space-between;
       align-items: center;
+      min-height: 52px;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .panel-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
     }
 
     .panel-title {
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       font-weight: 700;
       color: var(--text-secondary);
       display: flex;
       align-items: center;
       gap: 0.5rem;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.04em;
     }
 
     .panel-body {
@@ -377,7 +515,8 @@
     .editor-textarea {
       width: 100%;
       height: 100%;
-      min-height: 450px;
+      min-height: 460px;
+      max-height: 600px;
       flex: 1;
       background: transparent;
       border: none;
@@ -388,6 +527,79 @@
       font-family: 'Courier New', Courier, monospace;
       font-size: 1rem;
       line-height: 1.6;
+      overflow-y: auto;
+    }
+
+    /* 預覽區頁籤樣式 (用於 HTML 模式切換預覽與原始碼) */
+    .tabs-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0.4rem 1.15rem 0 1rem;
+      min-height: 52px;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .tabs-nav-group {
+      display: flex;
+      gap: 0.25rem;
+      align-self: flex-end;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-secondary);
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 0.9rem;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+      border: 1px solid transparent;
+      border-bottom: none;
+      transition: var(--transition-base);
+    }
+
+    .tab-btn:hover {
+      color: var(--text-primary);
+      background: rgba(0, 0, 0, 0.02);
+    }
+
+    .tab-btn.active {
+      color: var(--accent-primary);
+      background: var(--bg-secondary);
+      border-color: var(--border-color);
+      margin-bottom: -1px;
+      position: relative;
+      z-index: 5;
+    }
+
+    .tab-content {
+      display: none;
+      flex: 1;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .tab-content.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .code-info-bar {
+      background: #1e293b;
+      color: #cbd5e1;
+      font-size: 0.82rem;
+      padding: 0.55rem 1.25rem;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
 
     /* 預覽區 */
@@ -399,6 +611,25 @@
       background: var(--bg-secondary);
       color: var(--text-primary);
       font-family: var(--font-sans);
+    }
+
+    /* HTML 原始碼顯示區 */
+    .code-textarea {
+      width: 100%;
+      height: 100%;
+      min-height: 420px;
+      max-height: 560px;
+      flex: 1;
+      background: #0f172a;
+      color: #38bdf8;
+      border: none;
+      resize: none;
+      outline: none;
+      padding: 1.5rem;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      overflow-y: auto;
     }
 
     /* Markdown 樣式渲染 */
@@ -450,7 +681,6 @@
     }
 
     .markdown-body blockquote {
-      padding: 0 1em;
       color: var(--text-secondary);
       border-left: 0.25em solid var(--accent-secondary);
       background: rgba(124, 58, 237, 0.04);
@@ -544,7 +774,7 @@
       margin: 0 auto;
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 0.4rem;
     }
 
     /* 讀取狀態遮罩與 Spinner */
@@ -635,7 +865,7 @@
       .workspace-splitter {
         display: none !important;
       }
-      .editor-textarea {
+      .editor-textarea, .code-textarea {
         min-height: 350px;
       }
     }
@@ -644,6 +874,19 @@
       main {
         padding: 1rem;
       }
+      header {
+        padding: 1rem;
+      }
+      .header-container {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .nav-links {
+        justify-content: center;
+      }
+      .header-badge {
+        align-self: center;
+      }
       .control-panel {
         flex-direction: column;
         align-items: stretch;
@@ -651,6 +894,81 @@
       .control-group-left, .control-group-right {
         flex-direction: column;
         align-items: stretch;
+      }
+      .filename-group {
+        width: 100%;
+      }
+      .filename-group .input-text {
+        flex: 1;
+      }
+      .pdf-hint-list {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* 針對列印模式 (@media print) 的高度最佳化設定 */
+    @media print {
+      header, 
+      footer, 
+      .hero-banner, 
+      .pdf-hint-panel, 
+      .control-panel, 
+      .panel-header, 
+      .tabs-header,
+      .editor-textarea, 
+      .toast-container, 
+      .loading-overlay, 
+      .workspace-splitter,
+      #editor-card,
+      #tab-code {
+        display: none !important;
+      }
+
+      body {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+
+      main {
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+
+      .workspace {
+        display: block !important;
+      }
+
+      .panel-card {
+        border: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+      }
+
+      #tab-preview {
+        display: block !important;
+        overflow: visible !important;
+      }
+
+      .preview-container {
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: visible !important;
+        max-height: none !important;
+        height: auto !important;
+        background: transparent !important;
+        color: #000000 !important;
+      }
+
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
     }
   </style>
@@ -667,9 +985,9 @@
     </defs>
   </svg>
 
-  <header>
+  <header class="no-print">
     <div class="header-container">
-      <div class="logo">
+      <div class="logo" id="logo-brand" title="回到預設 Word 轉換模式">
         <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
           <polyline points="14 2 14 8 20 8"></polyline>
@@ -680,29 +998,44 @@
         <span>MarkWord</span>
       </div>
       
-      <nav class="nav-links">
-        <a href="index.html" class="nav-item active">Markdown 轉 Word</a>
-        <a href="markdown-to-html.html" class="nav-item">Markdown 轉 HTML</a>
-        <a href="markdown-to-pdf.html" class="nav-item">Markdown 轉 PDF</a>
+      <nav class="nav-links" aria-label="轉換模式選擇">
+        <button type="button" class="nav-item active" data-mode="word">Markdown 轉 Word</button>
+        <button type="button" class="nav-item" data-mode="html">Markdown 轉 HTML</button>
+        <button type="button" class="nav-item" data-mode="pdf">Markdown 轉 PDF</button>
       </nav>
 
-      <div class="header-badge">瀏覽器端轉換</div>
+      <div class="header-badge">瀏覽器本地端轉換</div>
     </div>
   </header>
 
   <main>
-    <!-- 說明區 -->
-    <section class="hero-banner">
-      <h1>Markdown 轉 Word 線上轉換工具</h1>
-      <p>在瀏覽器端將 Markdown 格式即時解析並轉換為高品質的 Word (.docx) 檔案。保護隱私安全，無需將文件上傳至任何伺服器。</p>
+    <!-- 動態說明橫幅 -->
+    <section class="hero-banner no-print">
+      <h1 id="hero-title">Markdown 轉 Word 線上轉換工具</h1>
+      <p id="hero-desc">在瀏覽器端將 Markdown 格式即時解析並轉換為高相容性的 Word (.doc) 檔案。保護隱私安全，無需將文件上傳至任何伺服器。</p>
+    </section>
+
+    <!-- PDF 模式專屬提示方框 -->
+    <section id="pdf-hint-panel" class="pdf-hint-panel no-print hidden">
+      <div class="pdf-hint-title">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        另存為 PDF 建議設定說明：
+      </div>
+      <ul class="pdf-hint-list">
+        <li><strong>目的地選擇</strong>：請於系統列印視窗中將目的地設為<strong>「另存為 PDF」</strong>。</li>
+        <li><strong>啟用背景圖形</strong>：展開「更多設定」，並<strong>勾選「背景圖形」</strong>以保留表格間色與代碼區塊底色。</li>
+        <li><strong>取消頁首和頁尾</strong>：建議<strong>取消勾選「頁首和頁尾」</strong>以移除網頁網址與列印日期，使文件更為精緻專業。</li>
+      </ul>
     </section>
 
     <!-- 控制區 -->
-    <section class="control-panel">
+    <section class="control-panel no-print">
       <div class="control-group-left">
         <!-- 檔案上傳 -->
         <input type="file" id="file-upload" class="file-input" accept=".md,.markdown,.txt">
-        <button class="btn btn-secondary" onclick="document.getElementById('file-upload').click()">
+        <button type="button" class="btn btn-secondary" id="btn-upload-trigger" title="支援點擊選取或直接將檔案拖放至下方編輯區">
           <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
           </svg>
@@ -710,54 +1043,93 @@
         </button>
         
         <!-- 預設範例 -->
-        <button class="btn btn-outline" id="btn-example">載入預設範例</button>
+        <button type="button" class="btn btn-outline" id="btn-example">載入預設範例</button>
         <!-- 清除按鈕 -->
-        <button class="btn btn-outline" id="btn-clear">清空內容</button>
+        <button type="button" class="btn btn-outline" id="btn-clear">清空內容</button>
+        <!-- 復原按鈕 (當執行清空或覆蓋時自動浮現) -->
+        <button type="button" class="btn btn-undo hidden" id="btn-undo" title="還原剛才被清空或覆蓋的內容">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+          </svg>
+          復原內容
+        </button>
       </div>
 
       <div class="control-group-right">
-        <!-- 輸出檔名 -->
-        <input type="text" id="filename-input" class="input-text" placeholder="輸出檔案名稱" value="我的轉換文件">
+        <!-- 複合式輸出檔名輸入框 (含動態副檔名顯示) -->
+        <div class="filename-group" title="設定導出檔案的主檔名，系統會自動附加對應副檔名">
+          <span class="filename-prefix">檔名</span>
+          <input type="text" id="filename-input" class="input-text" placeholder="請輸入檔案名稱" value="我的轉換文件">
+          <span class="filename-ext" id="filename-ext">.doc</span>
+        </div>
         
-        <!-- 導出 Word 按鈕 -->
-        <button class="btn btn-primary" id="btn-export-doc" title="將文件轉換並匯出為 Word 格式檔案 (.doc)">
+        <!-- Word 專屬操作按鈕 -->
+        <button type="button" class="btn btn-primary" id="btn-export-doc" title="將文件轉換並匯出為 Word 整頁模式檔案 (.doc)">
           <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
           </svg>
-          導出為 Word 檔案 (.doc)
+          導出為 Word 檔案
+        </button>
+
+        <!-- HTML 專屬操作按鈕 -->
+        <button type="button" class="btn btn-outline hidden" id="btn-copy-html" title="複製純淨 HTML 標籤片段">
+          複製 HTML 原始碼
+        </button>
+        <button type="button" class="btn btn-primary hidden" id="btn-export-html" title="轉換並下載為含樣式與 KaTeX 公式渲染的獨立網頁檔案 (.html)">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          導出為 HTML 檔案
+        </button>
+
+        <!-- PDF 專屬操作按鈕 -->
+        <button type="button" class="btn btn-primary hidden" id="btn-export-pdf" title="將文件轉換並列印下載為 PDF 檔案 (.pdf)">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+          </svg>
+          導出為 PDF 檔案
         </button>
       </div>
     </section>
 
     <!-- 工作區 -->
     <section class="workspace">
-      <!-- 編輯面板 -->
+      <!-- 左側：編輯面板 -->
       <div class="panel-card" id="editor-card" style="width: calc(50% - 6px); flex: 0 0 auto;">
         <div class="panel-header">
           <div class="panel-title">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
             </svg>
-            Markdown 編輯區
+            Markdown 編輯區（支援拖放檔案）
           </div>
-          <span style="font-size: 0.8rem; color: var(--text-muted);" id="char-count">字數: 0</span>
+          <div class="panel-header-actions">
+            <button type="button" class="btn btn-outline btn-sm" id="btn-paste-md" title="一鍵從剪貼簿貼上 AI 產出的 Markdown 內容">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+              </svg>
+              貼上剪貼簿
+            </button>
+            <span style="font-size: 0.8rem; color: var(--text-muted);" id="char-count">字數: 0</span>
+          </div>
         </div>
         <div class="panel-body">
-          <textarea id="markdown-editor" class="editor-textarea" placeholder="在此輸入您的 Markdown 內容..."></textarea>
+          <textarea id="markdown-editor" class="editor-textarea" placeholder="在此輸入或貼上您的 Markdown 內容，或直接將 .md / .txt 檔案拖曳至此處..."></textarea>
         </div>
       </div>
 
-      <!-- 拖曳分割線 -->
+      <!-- 中間：拖曳分割線 -->
       <div class="workspace-splitter" id="workspace-splitter"></div>
 
-      <!-- 預覽面板 -->
+      <!-- 右側：預覽與原始碼面板 -->
       <div class="panel-card" id="preview-card" style="position: relative; flex: 1 1 0%; min-width: 250px;">
         <!-- 載入中遮罩 -->
         <div id="loading-overlay" class="loading-overlay">
           <div class="spinner"></div>
         </div>
         
-        <div class="panel-header">
+        <!-- 一般預覽標題 (Word / PDF 模式顯示) -->
+        <div id="standard-preview-header" class="panel-header">
           <div class="panel-title">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -765,10 +1137,49 @@
             </svg>
             即時預覽區
           </div>
+          <div class="panel-header-actions">
+            <button type="button" class="btn btn-outline btn-sm" id="btn-copy-rich" title="複製已排版的富文本內容，可直接貼入 Word、Google Docs 或信件中">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+              </svg>
+              複製排版內容
+            </button>
+          </div>
         </div>
+
+        <!-- 雙頁籤選擇器 (HTML 模式顯示) -->
+        <div id="html-tabs-header" class="tabs-header hidden">
+          <div class="tabs-nav-group">
+            <button type="button" class="tab-btn active" data-tab="tab-preview">即時預覽</button>
+            <button type="button" class="tab-btn" data-tab="tab-code">HTML 原始碼</button>
+          </div>
+          <div class="panel-header-actions" style="padding-bottom: 0.4rem;">
+            <button type="button" class="btn btn-outline btn-sm" id="btn-copy-rich-html" title="複製已排版的富文本內容，可直接貼入 Word、Google Docs 或信件中">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+              </svg>
+              複製排版內容
+            </button>
+          </div>
+        </div>
+
         <div class="panel-body">
-          <div id="html-preview" class="preview-container markdown-body">
-            <!-- 預覽內容 -->
+          <!-- 頁籤一：渲染預覽 -->
+          <div id="tab-preview" class="tab-content active">
+            <div id="html-preview" class="preview-container markdown-body">
+              <!-- 預覽內容 -->
+            </div>
+          </div>
+
+          <!-- 頁籤二：HTML 原始碼 -->
+          <div id="tab-code" class="tab-content">
+            <div class="code-info-bar">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color: #38bdf8; flex-shrink: 0;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span>此處為純淨 HTML 結構片段（適合貼入部落格或 CMS 後台）；若需包含完整 CSS 樣式與 KaTeX 公式渲染腳本的獨立網頁，請點選右上角「導出為 HTML 檔案」。</span>
+            </div>
+            <textarea id="html-code-textarea" class="code-textarea" readonly placeholder="產生的 HTML 原始碼會顯示在此..."></textarea>
           </div>
         </div>
       </div>
@@ -776,75 +1187,132 @@
   </main>
 
   <!-- 浮動通知容器 -->
-  <div class="toast-container" id="toast-container"></div>
+  <div class="toast-container no-print" id="toast-container"></div>
 
-  <footer>
+  <footer class="no-print">
     <div class="footer-container">
       <p>&copy; 2026 MarkWord 線上轉換工具. All rights reserved.</p>
-      <p>本系統使用 marked.js 解析 Markdown 語法，並由 docshift 進行純前端 Office Open XML (.docx) 架構封裝與檔案導出。</p>
+      <p id="footer-desc">本系統為單頁應用程式架構，使用 marked.js 與 KaTeX 進行本地端即時解析，並透過 DOMPurify 強化資訊安全，保護您的文件隱私。</p>
     </div>
   </footer>
 
   <script>
-    // 預設範例內容
-    const sampleMarkdown = `# 歡迎使用 MarkWord 轉換工具！
+    // HTML 轉義防禦函數 (防範 XSS)
+    function escapeHtml(str) {
+      if (typeof str !== 'string') return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
 
-這是一個**純前端**的 Markdown 轉 Word 檔案轉換工具。您在此處輸入的任何內容都**不會**上傳到伺服器，完全在您的瀏覽器中本地處理，隱私安全無虞。
+    // 保護 LaTeX 數學公式不被 marked.js 誤拆 (避免 x_1 + x_2 的底線被當作斜體 <em> 或矩陣 \\ 被吃掉)
+    function parseMarkdownWithMathProtection(markdownText) {
+      const codeBlocks = [];
+      const mathBlocks = [];
+
+      // 1. 先保護 fenced code blocks (```...```) 與行內 code (`...`)，避免裡面的 $ 符號被當成公式
+      let protectedText = markdownText.replace(/(```[\s\S]*?```|`[^`\n]+`)/g, (match) => {
+        const id = codeBlocks.length;
+        codeBlocks.push(match);
+        return `@@MARKWORDCODEBLOCK${id}END@@`;
+      });
+
+      // 2. 保護區塊公式 $$...$$ 與 \[...\]
+      protectedText = protectedText.replace(/(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\])/g, (match) => {
+        const id = mathBlocks.length;
+        mathBlocks.push(match);
+        return `@@MARKWORDMATHBLOCK${id}END@@`;
+      });
+
+      // 3. 保護行內公式 $...$ 與 \(...\)
+      protectedText = protectedText.replace(/(\$(?!\s)(?:\\.|[^$\n])+?(?<!\s)\$|\\\([\s\S]+?\\\))/g, (match) => {
+        const id = mathBlocks.length;
+        mathBlocks.push(match);
+        return `@@MARKWORDMATHBLOCK${id}END@@`;
+      });
+
+      // 4. 還原程式碼區塊交由 marked.parse 正確解析為 <pre><code>
+      protectedText = protectedText.replace(/@@MARKWORDCODEBLOCK(\d+)END@@/g, (_, id) => {
+        return codeBlocks[Number(id)];
+      });
+
+      // 5. 執行 Markdown 解析與 DOMPurify 清理
+      const rawHtml = marked.parse(protectedText);
+      const cleanHtml = (typeof DOMPurify !== 'undefined')
+        ? DOMPurify.sanitize(rawHtml)
+        : rawHtml;
+
+      // 6. 將數學公式佔位符還原為經過 HTML 轉義的純文字公式，交由後續 KaTeX renderMathInElement 處理
+      const finalHtml = cleanHtml.replace(/@@MARKWORDMATHBLOCK(\d+)END@@/g, (_, id) => {
+        return escapeHtml(mathBlocks[Number(id)]);
+      });
+
+      return finalHtml;
+    }
+
+    // 預設範例內容
+    const sampleMarkdown = `# 歡迎使用 MarkWord 三合一轉換工具！
+
+這是一個**純前端**的 Markdown 轉 Word、HTML 與 PDF 轉換工具。您在此處輸入的任何內容都**不會**上傳到伺服器，完全在您的瀏覽器中本地處理，並自動暫存於瀏覽器中，切換模式或重新整理皆不會遺失進度。
 
 ## 主要特色功能
 
-1. **即時編輯預覽** — 左側輸入 Markdown，右側立即顯示排版效果（包含數學公式與特殊符號）。
-2. **匯入現有檔案** — 支援匯入 \`.md\` 或是 \`.txt\` 格式的檔案進行轉換。
-3. **優雅的排版** — 自動將 Markdown 轉換成帶有微調樣式的 Word 檔，方便於後續編輯。
+1. **三合一單頁架構**：頂部導覽列可一鍵無縫切換「轉 Word」、「轉 HTML」與「轉 PDF」模式，共用同一份編輯內容。
+2. **即時預覽與同步捲動**：左側輸入 Markdown，右側立即顯示排版效果，長文捲動時雙欄自動同步對齊。
+3. **快捷剪貼簿與拖放匯入**：支援點擊「貼上剪貼簿」快速貼入 AI 產出內容、點擊「複製排版內容」直接貼入 Word 或 Google Docs，或直接將 \`.md\` 檔案拖放至編輯區。
 
 ---
 
 ## 支援的常見語法範例
 
-### 1. 數學公式與特殊符號
+### 1. 數學公式與特殊符號（含多重底線保護）
 
-本工具支援標準 LaTeX 數學公式即時渲染：
+本工具支援標準 LaTeX 數學公式即時渲染，且完整保護多重下標不被 Markdown 斜體語法破壞：
 
-- **行內公式 (Inline Math)**：例如質能等價公式 $E = mc^2$，或者圓周率相關的 $\\pi \\approx 3.14159$。
+- **行內公式 (Inline Math)**：例如質能等價公式 $E = mc^2$、多重下標變數 $x_1 + x_2 + x_3 = y_n$，或者圓周率 $\\pi \\approx 3.14159$。
 - **區塊公式 (Block Math)**：
   $$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$
   或是矩陣運算：
-  $$A = \\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$$
+  $$A = \\begin{pmatrix} a_{11} & a_{12} \\\\ a_{21} & a_{22} \\end{pmatrix}$$
 - **常用特殊符號**：希臘字母 $\\alpha$, $\\beta$, $\\lambda$, $\\theta$，以及關係符號 $\\approx$, $\\neq$, $\\le$, $\\ge$, $\\infty$，與箭頭 $\\rightarrow$, $\\Rightarrow$。
 
-> **導出 Word 的數學公式說明**：
-> 導出的 Word 檔案會保留最乾淨的 LaTeX 原始碼（例如 \`$E = mc^2$\`），這能防止轉換時格式損壞。
-> **在 Microsoft Word 中轉換**：您只需選中公式文字，然後按下鍵盤快速鍵 \`Alt\` + \`=\`（在 macOS 上為 \`Option\` + \`=\`），Word 就會立刻自動將其轉換為漂亮的**原生 Word 公式物件**。
+> **三種導出格式選擇建議**：
+> 1. **Markdown 轉 Word (.doc)**：適合純文字報告與含簡易符號之文件，匯出時將自動設定為 Word 整頁模式並以 Unicode 視覺排版呈現特殊符號。
+> 2. **Markdown 轉 HTML (.html)**：適合包含複雜數學公式或需要取得乾淨網頁原始碼的場景，導出的獨立 HTML 內建 KaTeX 渲染支援。
+> 3. **Markdown 轉 PDF (.pdf)**：適合需要直接產出向量級清晰公式與標準排版文件的列印歸檔需求。
 
 ### 2. 列表語法
 
-- 項目一：精緻的設計美學
-- 項目二：完全基於瀏覽器本地執行
-- 項目三：不留任何伺服器暫存紀錄
+- 項目一：預設明亮模式，視覺清爽清晰
+- 項目二：完全基於瀏覽器本地執行，支援離線單檔運作
+- 項目三：內建 DOMPurify 安全過濾與防誤刪復原機制
 
 ### 3. 程式碼區塊
 
-您可以撰寫程式碼，它也會被適當轉換：
+您可以撰寫程式碼，系統會自動轉換為等寬字體區塊：
 
 \`\`\`javascript
-async function convertToDocx(htmlContent) {
-  // 將 HTML 轉換為 DOCX 的 Blob 檔案
-  const docxBlob = await window.docshift.toDocx(htmlContent);
-  return docxBlob;
+function exportDocument(mode, content) {
+  // 根據當前選擇的模式導出對應格式
+  console.log("Exporting mode:", mode);
+  return true;
 }
 \`\`\`
 
 ### 4. 表格範例
 
-| 格式 | 支援度 | 說明 |
+| 轉換模式 | 輸出副檔名 | 適用場景說明 |
 | :--- | :---: | :--- |
-| **Markdown** | 100% | 採用 marked.js 解析 |
-| **Word (docx)** | 100% | 採用 docshift 引擎導出 |
-| **隱私安全** | 100% | 無任何伺服器交互 |
+| **Markdown 轉 Word** | \`.doc\` | 一般行政報告、純文字與基礎符號編輯 |
+| **Markdown 轉 HTML** | \`.html\` | 複雜科學公式展示、部落格與網頁原始碼發布 |
+| **Markdown 轉 PDF** | \`.pdf\` | 向量級公式列印、跨平台固定版面分享 |
 
 ### 5. 引用區塊
 
-> 「這是引用區塊的樣式，通常用於強調某些名言或是說明文件的背景脈絡。」 — 系統提示
+> 「結構完整性優先於語氣自然度，資訊完整性優先於篇幅精簡。」
 
 ### 6. 格式化字元
 
@@ -852,387 +1320,981 @@ async function convertToDocx(htmlContent) {
 * **粗體字**
 * ~~刪除線~~
 * \`單行程式碼\`
-
----
 `;
 
+    // 三種模式的介面設定資料
+    const modeConfig = {
+      word: {
+        pageTitle: 'MarkWord — Markdown 轉 Word 線上轉換工具',
+        heroTitle: 'Markdown 轉 Word 線上轉換工具',
+        heroDesc: '在瀏覽器端將 Markdown 格式即時解析並轉換為高相容性的 Word (.doc) 檔案。保護隱私安全，無需將文件上傳至任何伺服器。',
+        defaultFilename: '我的轉換文件',
+        ext: '.doc'
+      },
+      html: {
+        pageTitle: 'MarkWord — Markdown 轉 HTML 線上轉換工具',
+        heroTitle: 'Markdown 轉 HTML 線上轉換工具',
+        heroDesc: '在瀏覽器端將 Markdown 語法轉換為乾淨的 HTML 網頁程式碼。支援即時渲染預覽與獨立網頁導出，無任何後端上傳。',
+        defaultFilename: '我的轉換網頁',
+        ext: '.html'
+      },
+      pdf: {
+        pageTitle: 'MarkWord — Markdown 轉 PDF 線上轉換工具',
+        heroTitle: 'Markdown 轉 PDF 線上轉換工具',
+        heroDesc: '在瀏覽器端將 Markdown 格式即時解析並導出為 PDF 文件。支援向量級 KaTeX 數學公式與文字複製選取，保護您的隱私安全。',
+        defaultFilename: '我的轉換文件',
+        ext: '.pdf'
+      }
+    };
+
+    // LocalStorage 儲存鍵值
+    const STORAGE_KEY_CONTENT = 'markword_saved_markdown_v1';
+    const STORAGE_KEY_FILENAME = 'markword_saved_filename_v1';
+
     // 取得 DOM 元素
+    const logoBrand = document.getElementById('logo-brand');
+    const navItems = document.querySelectorAll('.nav-item[data-mode]');
+    const heroTitle = document.getElementById('hero-title');
+    const heroDesc = document.getElementById('hero-desc');
+    const pdfHintPanel = document.getElementById('pdf-hint-panel');
+
     const markdownEditor = document.getElementById('markdown-editor');
     const htmlPreview = document.getElementById('html-preview');
+    const htmlCodeTextarea = document.getElementById('html-code-textarea');
     const fileUpload = document.getElementById('file-upload');
+    const btnUploadTrigger = document.getElementById('btn-upload-trigger');
     const filenameInput = document.getElementById('filename-input');
+    const filenameExt = document.getElementById('filename-ext');
+
     const btnExportDoc = document.getElementById('btn-export-doc');
+    const btnCopyHtml = document.getElementById('btn-copy-html');
+    const btnExportHtml = document.getElementById('btn-export-html');
+    const btnExportPdf = document.getElementById('btn-export-pdf');
+
     const btnExample = document.getElementById('btn-example');
     const btnClear = document.getElementById('btn-clear');
+    const btnUndo = document.getElementById('btn-undo');
+    const btnPasteMd = document.getElementById('btn-paste-md');
+    const btnCopyRich = document.getElementById('btn-copy-rich');
+    const btnCopyRichHtml = document.getElementById('btn-copy-rich-html');
+
     const charCount = document.getElementById('char-count');
     const loadingOverlay = document.getElementById('loading-overlay');
 
-    // 初始化設定
-    window.addEventListener('DOMContentLoaded', () => {
-      // 載入預設範例
-      markdownEditor.value = sampleMarkdown;
-      updatePreview();
-    });
+    const standardPreviewHeader = document.getElementById('standard-preview-header');
+    const htmlTabsHeader = document.getElementById('html-tabs-header');
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
 
-    // 編輯器輸入事件
-    markdownEditor.addEventListener('input', () => {
-      updatePreview();
-    });
+    const splitter = document.getElementById('workspace-splitter');
+    const editorCard = document.getElementById('editor-card');
+    const previewCard = document.getElementById('preview-card');
 
-    // 解析並更新預覽
+    let currentMode = 'word';
+    let lastBackupContent = null;
+
+    // 儲存覆蓋前的備份以供「復原內容」使用
+    function saveUndoBackup(content) {
+      if (content && content.trim().length > 0) {
+        lastBackupContent = content;
+        if (btnUndo) btnUndo.classList.remove('hidden');
+      }
+    }
+
+    // 切換模式函數 (word / html / pdf)
+    function switchMode(mode, updateHash = true) {
+      if (!modeConfig[mode]) {
+        mode = 'word';
+      }
+      currentMode = mode;
+
+      // 1. 更新導覽列按鈕狀態
+      navItems.forEach(item => {
+        if (item.getAttribute('data-mode') === mode) {
+          item.classList.add('active');
+        } else {
+          item.classList.remove('active');
+        }
+      });
+
+      // 2. 更新標題、橫幅文案與動態副檔名標籤
+      const config = modeConfig[mode];
+      document.title = config.pageTitle;
+      if (heroTitle) heroTitle.textContent = config.heroTitle;
+      if (heroDesc) heroDesc.textContent = config.heroDesc;
+      if (filenameExt) filenameExt.textContent = config.ext;
+
+      // 若檔名仍為預設值，則隨模式切換預設名稱
+      if (filenameInput) {
+        const val = filenameInput.value.trim();
+        if (val === '我的轉換文件' || val === '我的轉換網頁' || !val) {
+          filenameInput.value = config.defaultFilename;
+        }
+      }
+
+      // 3. 切換控制區按鈕與提示面板顯示狀態
+      if (pdfHintPanel) pdfHintPanel.classList.toggle('hidden', mode !== 'pdf');
+      if (btnExportDoc) btnExportDoc.classList.toggle('hidden', mode !== 'word');
+      if (btnCopyHtml) btnCopyHtml.classList.toggle('hidden', mode !== 'html');
+      if (btnExportHtml) btnExportHtml.classList.toggle('hidden', mode !== 'html');
+      if (btnExportPdf) btnExportPdf.classList.toggle('hidden', mode !== 'pdf');
+
+      // 4. 切換預覽面板標頭與頁籤
+      if (mode === 'html') {
+        if (standardPreviewHeader) standardPreviewHeader.classList.add('hidden');
+        if (htmlTabsHeader) htmlTabsHeader.classList.remove('hidden');
+      } else {
+        if (standardPreviewHeader) standardPreviewHeader.classList.remove('hidden');
+        if (htmlTabsHeader) htmlTabsHeader.classList.add('hidden');
+        activateTab('tab-preview');
+      }
+
+      // 5. 更新網址 Hash 支援直接分享特定模式連結
+      if (updateHash) {
+        if (history.replaceState) {
+          history.replaceState(null, '', '#' + mode);
+        } else {
+          window.location.hash = mode;
+        }
+      }
+    }
+
+    // 切換預覽區內部頁籤 (即時預覽 / HTML 原始碼)
+    function activateTab(targetTabId) {
+      tabButtons.forEach(btn => {
+        if (btn.getAttribute('data-tab') === targetTabId) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+      tabContents.forEach(content => {
+        if (content.id === targetTabId) {
+          content.classList.add('active');
+        } else {
+          content.classList.remove('active');
+        }
+      });
+    }
+
+    // 解析並更新預覽與 HTML 原始碼
     function updatePreview() {
+      if (!markdownEditor || !htmlPreview) return;
       const markdownText = markdownEditor.value;
       
       // 更新字數統計
-      charCount.textContent = `字數: ${markdownText.length}`;
+      if (charCount) {
+        charCount.textContent = `字數: ${markdownText.length}`;
+      }
+
+      // 自動儲存至 LocalStorage
+      try {
+        localStorage.setItem(STORAGE_KEY_CONTENT, markdownText);
+      } catch (e) {}
       
       try {
-        // 使用 marked.parse 將 Markdown 轉為 HTML
-        const html = marked.parse(markdownText);
-        htmlPreview.innerHTML = html;
+        // 1. 使用具備公式保護機制的解析器轉為安全的 HTML
+        const cleanHtml = parseMarkdownWithMathProtection(markdownText);
         
-        // 渲染數學公式 (KaTeX)
+        // 2. 更新預覽區與原始碼文字框
+        htmlPreview.innerHTML = cleanHtml;
+        if (htmlCodeTextarea) {
+          htmlCodeTextarea.value = cleanHtml;
+        }
+        
+        // 3. 渲染數學公式 (KaTeX)
         if (typeof renderMathInElement === 'function') {
           renderMathInElement(htmlPreview, {
             delimiters: [
               { left: '$$', right: '$$', display: true },
               { left: '$', right: '$', display: false },
               { left: '\\(', right: '\\)', display: false },
-              { left: '\\[', right: '\\[', display: true }
+              { left: '\\[', right: '\\]', display: true }
             ],
             throwOnError: false
           });
         }
       } catch (error) {
         console.error('Markdown 解析錯誤:', error);
-        htmlPreview.innerHTML = `<span style="color: var(--error);">解析錯誤: ${error.message}</span>`;
+        const safeMsg = escapeHtml(error.message || '未知錯誤');
+        htmlPreview.innerHTML = `<span style="color: var(--error);">解析錯誤: ${safeMsg}</span>`;
+        if (htmlCodeTextarea) {
+          htmlCodeTextarea.value = `解析錯誤: ${error.message}`;
+        }
       }
     }
 
-    // 載入範例按鈕事件
-    btnExample.addEventListener('click', () => {
-      markdownEditor.value = sampleMarkdown;
-      updatePreview();
-      showToast('已載入預設範例！', 'success');
-    });
-
-    // 清空內容按鈕事件
-    btnClear.addEventListener('click', () => {
-      markdownEditor.value = '';
-      updatePreview();
-      showToast('內容已清空', 'success');
-    });
-
-    // 處理檔案上傳匯入
-    fileUpload.addEventListener('change', (event) => {
-      const file = event.target.files[0];
+    // 處理檔案讀取共用函數 (供上傳按鈕與拖放功能呼叫)
+    function handleFileImport(file) {
       if (!file) return;
-
       const reader = new FileReader();
       reader.onload = (e) => {
-        markdownEditor.value = e.target.result;
-        updatePreview();
-        
+        if (markdownEditor) {
+          saveUndoBackup(markdownEditor.value);
+          markdownEditor.value = e.target.result;
+          updatePreview();
+        }
         // 自動帶入檔案名稱（去除副檔名）
-        const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-        filenameInput.value = nameWithoutExt;
-        
+        const lastDotIndex = file.name.lastIndexOf('.');
+        const nameWithoutExt = lastDotIndex > 0 ? file.name.substring(0, lastDotIndex) : file.name;
+        if (filenameInput) {
+          filenameInput.value = nameWithoutExt;
+          try {
+            localStorage.setItem(STORAGE_KEY_FILENAME, nameWithoutExt);
+          } catch (err) {}
+        }
         showToast(`成功匯入檔案: ${file.name}`, 'success');
       };
-      
-      reader.onerror = (err) => {
+      reader.onerror = () => {
         showToast('檔案讀取失敗，請重新嘗試。', 'error');
-        console.error(err);
       };
-
       reader.readAsText(file);
-      // 清空 input 讓同一個檔案可以重複選取觸發 change
-      fileUpload.value = '';
-    });
+    }
 
-    // 導出高相容 Word (.doc) 按鈕事件 — 推薦，能完美保留公式與排版
-    btnExportDoc.addEventListener('click', () => {
-      const markdownText = markdownEditor.value.trim();
-      
-      if (!markdownText) {
-        showToast('請先輸入或匯入一些 Markdown 內容再進行轉換。', 'error');
+    // 複製預覽區富文本排版內容 (可直接貼入 Word / Google Docs)
+    async function copyRenderedRichText() {
+      if (!htmlPreview || !htmlPreview.innerHTML.trim()) {
+        showToast('目前預覽區沒有可複製的內容。', 'error');
         return;
       }
 
-      // 取得設定的檔名，若無則給預設值
-      let filename = filenameInput.value.trim();
-      if (!filename) {
-        filename = '我的轉換文件';
-      }
-      
-      // 確保副檔名為 .doc
-      if (!filename.endsWith('.doc') && !filename.endsWith('.docx')) {
-        filename += '.doc';
-      } else if (filename.endsWith('.docx')) {
-        // 如果使用者輸入了 .docx，我們幫他改成 .doc
-        filename = filename.substring(0, filename.lastIndexOf('.')) + '.doc';
-      }
-
-      // 顯示載入中遮罩
-      loadingOverlay.classList.add('active');
-      btnExportDoc.disabled = true;
-
       try {
-        // 使用一個臨時 div 來處理公式
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = htmlPreview.innerHTML;
+        // 剔除 .katex-mathml 避免貼入 Word 時公式文字重複
+        tempDiv.querySelectorAll('.katex-mathml').forEach(el => el.remove());
 
-        // 徹底刪除 KaTeX 為了無障礙與 MathML 產生的 .katex-mathml 元素，只保留 .katex-html 的渲染結果
-        // 這能 100% 避免 MathML 被 Word 剥離標籤後產生的重複 LaTeX 原始文字 Bug，同時保留漂亮的特殊符號渲染外觀
-        const katexMathMLs = tempDiv.querySelectorAll('.katex-mathml');
-        katexMathMLs.forEach(el => el.remove());
-
-        const innerHtml = tempDiv.innerHTML;
-
-        // 構建帶有 Word XML 命名空間與完整 CSS 的 HTML
-        const fullHtmlString = `
-          <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-          <head>
-            <meta charset="utf-8">
-            <title>${filename}</title>
-            <style>
-              body {
-                font-family: 'Times New Roman', 'Microsoft JhengHei', 'PMingLiU', 'Segoe UI Symbol', 'Arial Unicode MS', serif;
-                font-size: 12pt;
-                line-height: 1.6;
-                color: #000000;
-              }
-              h1 {
-                font-size: 20pt;
-                font-weight: bold;
-                margin-top: 18pt;
-                margin-bottom: 6pt;
-                color: #2c3e50;
-                border-bottom: 2px solid #3b82f6;
-                padding-bottom: 3pt;
-              }
-              h2 {
-                font-size: 16pt;
-                font-weight: bold;
-                margin-top: 14pt;
-                margin-bottom: 4pt;
-                color: #34495e;
-              }
-              h3 {
-                font-size: 14pt;
-                font-weight: bold;
-                margin-top: 12pt;
-                margin-bottom: 4pt;
-              }
-              p {
-                margin-top: 0;
-                margin-bottom: 8pt;
-                text-align: justify;
-              }
-              blockquote {
-                margin-top: 0;
-                margin-bottom: 8pt;
-                margin-left: 20pt;
-                margin-right: 20pt;
-                padding-left: 10pt;
-                border-left: 3pt solid #8b5cf6;
-                color: #555555;
-                font-style: italic;
-              }
-              ul, ol {
-                margin-top: 0;
-                margin-bottom: 8pt;
-                padding-left: 20pt;
-              }
-              li {
-                margin-bottom: 3pt;
-              }
-              code {
-                font-family: 'Courier New', monospace;
-                font-size: 10pt;
-                background-color: #f1f5f9;
-                padding: 1pt 3pt;
-              }
-              pre {
-                font-family: 'Courier New', monospace;
-                font-size: 10pt;
-                background-color: #f1f5f9;
-                padding: 8pt;
-                border: 1pt solid #cbd5e1;
-                margin-bottom: 8pt;
-                white-space: pre-wrap;
-              }
-              table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-bottom: 8pt;
-              }
-              th, td {
-                border: 1pt solid #cbd5e1;
-                padding: 6pt;
-                font-size: 10.5pt;
-              }
-              th {
-                background-color: #f1f5f9;
-                font-weight: bold;
-              }
-              hr {
-                border: none;
-                border-top: 1px solid #cbd5e1;
-                margin-top: 14pt;
-                margin-bottom: 14pt;
-              }
-            </style>
-          </head>
-          <body>
-            ${innerHtml}
-          </body>
-          </html>
+        const richHtml = `
+          <div style="font-family: 'Microsoft JhengHei', 'Times New Roman', sans-serif; font-size: 12pt; line-height: 1.6; color: #000000;">
+            ${tempDiv.innerHTML}
+          </div>
         `;
+        const plainText = htmlPreview.innerText;
 
-        // 將所有非 ASCII 字元轉換為 HTML 實體以 100% 避免編碼亂碼問題
-        const encodedHtml = fullHtmlString.replace(/[^\x00-\x7F]/g, function(c) {
-          return '&#' + c.charCodeAt(0) + ';';
-        });
-
-        // 轉換為 Blob
-        const blob = new Blob([encodedHtml], { type: 'application/msword;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const downloadLink = document.createElement('a');
-        downloadLink.href = url;
-        downloadLink.download = filename;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        
-        document.body.removeChild(downloadLink);
-        setTimeout(() => URL.revokeObjectURL(url), 100);
-
-        showToast('高相容 Word 檔 (.doc) 導出成功！已自動將數學公式轉換為原生公式物件。', 'success');
-      } catch (error) {
-        console.error('導出 Word 失敗:', error);
-        showToast(`導出失敗: ${error.message}`, 'error');
-      } finally {
-        loadingOverlay.classList.remove('active');
-        btnExportDoc.disabled = false;
+        if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+          const htmlBlob = new Blob([richHtml], { type: 'text/html' });
+          const textBlob = new Blob([plainText], { type: 'text/plain' });
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              'text/html': htmlBlob,
+              'text/plain': textBlob
+            })
+          ]);
+          showToast('已複製排版內容！您現在可直接貼入 Word 或 Google Docs 中。', 'success');
+        } else {
+          await navigator.clipboard.writeText(plainText);
+          showToast('已複製文字內容至剪貼簿！', 'success');
+        }
+      } catch (err) {
+        console.error('複製富文本失敗:', err);
+        showToast('複製失敗，請直接在預覽區全選複製。', 'error');
       }
-    });
+    }
 
-
-
-    // 顯示自訂 Toast 通知
+    // 顯示自訂 Toast 通知 (使用安全 DOM 建立防止 XSS)
     function showToast(message, type = 'success') {
       const container = document.getElementById('toast-container');
+      if (!container) return;
+
       const toast = document.createElement('div');
-      toast.className = `toast ${type}`;
+      toast.className = `toast ${type === 'error' ? 'error' : 'success'}`;
       
-      // 根據型態加入簡單的 SVG 圖示
-      let icon = '';
+      const iconWrapper = document.createElement('span');
+      iconWrapper.style.display = 'inline-flex';
       if (type === 'success') {
-        icon = `
+        iconWrapper.innerHTML = `
           <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color: var(--success);">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
         `;
       } else {
-        icon = `
+        iconWrapper.innerHTML = `
           <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color: var(--error);">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
           </svg>
         `;
       }
 
-      toast.innerHTML = `
-        ${icon}
-        <span>${message}</span>
-      `;
-      
+      const textSpan = document.createElement('span');
+      textSpan.textContent = message;
+
+      toast.appendChild(iconWrapper);
+      toast.appendChild(textSpan);
       container.appendChild(toast);
       
-      // 微小延遲以觸發 CSS 動畫
       setTimeout(() => {
         toast.classList.add('show');
       }, 50);
 
-      // 3.5 秒後自動移除通知
       setTimeout(() => {
         toast.classList.remove('show');
         setTimeout(() => {
-          container.removeChild(toast);
+          if (toast.parentNode === container) {
+            container.removeChild(toast);
+          }
         }, 300);
       }, 3500);
     }
 
-    // 實作左右拖曳大小功能 (Splitter)
-    const splitter = document.getElementById('workspace-splitter');
-    const editorCard = document.getElementById('editor-card');
-    const workspace = splitter.parentElement;
+    // 清理使用者輸入的檔名（若使用者自己打了 .doc / .html / .pdf 則自動剝除，統一由系統附加）
+    function getCleanBaseFilename(defaultName) {
+      if (!filenameInput) return defaultName;
+      let raw = filenameInput.value.trim();
+      if (!raw) return defaultName;
+      raw = raw.replace(/\.(docx?|html?|pdf)$/i, '');
+      return raw || defaultName;
+    }
 
-    let isDragging = false;
+    // 初始化設定
+    window.addEventListener('DOMContentLoaded', () => {
+      // 1. 讀取先前的儲存內容或載入預設範例
+      let savedContent = null;
+      let savedFilename = null;
+      try {
+        savedContent = localStorage.getItem(STORAGE_KEY_CONTENT);
+        savedFilename = localStorage.getItem(STORAGE_KEY_FILENAME);
+      } catch (e) {}
 
-    splitter.addEventListener('mousedown', (e) => {
-      isDragging = true;
-      splitter.classList.add('dragging');
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-      document.body.style.webkitUserSelect = 'none';
+      if (markdownEditor) {
+        markdownEditor.value = (savedContent !== null && savedContent !== '') ? savedContent : sampleMarkdown;
+      }
+      if (filenameInput && savedFilename) {
+        filenameInput.value = savedFilename.replace(/\.(docx?|html?|pdf)$/i, '');
+      }
+
+      // 2. 根據網址 Hash 決定初始模式 (#word, #html, #pdf)
+      const hashMode = window.location.hash.replace('#', '').toLowerCase();
+      if (modeConfig[hashMode]) {
+        switchMode(hashMode, false);
+      } else {
+        switchMode('word', false);
+      }
+
+      // 3. 初始渲染預覽
+      updatePreview();
     });
 
-    document.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-
-      const workspaceRect = workspace.getBoundingClientRect();
-      let newWidth = e.clientX - workspaceRect.left;
-
-      const minWidth = 250;
-      const maxWidth = workspaceRect.width - 250;
-
-      if (newWidth < minWidth) newWidth = minWidth;
-      if (newWidth > maxWidth) newWidth = maxWidth;
-
-      editorCard.style.width = `${newWidth}px`;
-    });
-
-    document.addEventListener('mouseup', () => {
-      if (isDragging) {
-        isDragging = false;
-        splitter.classList.remove('dragging');
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        document.body.style.webkitUserSelect = '';
+    // 監聽瀏覽器上一頁/下一頁 Hash 變更
+    window.addEventListener('hashchange', () => {
+      const hashMode = window.location.hash.replace('#', '').toLowerCase();
+      if (modeConfig[hashMode] && hashMode !== currentMode) {
+        switchMode(hashMode, false);
       }
     });
 
-    // 觸控裝置支援
-    splitter.addEventListener('touchstart', (e) => {
-      isDragging = true;
-      splitter.classList.add('dragging');
-      document.body.style.userSelect = 'none';
-      document.body.style.webkitUserSelect = 'none';
+    // 頂部導覽列點擊切換模式
+    navItems.forEach(item => {
+      item.addEventListener('click', () => {
+        const targetMode = item.getAttribute('data-mode');
+        switchMode(targetMode, true);
+      });
     });
 
-    document.addEventListener('touchmove', (e) => {
-      if (!isDragging) return;
-      const touch = e.touches[0];
-      const workspaceRect = workspace.getBoundingClientRect();
-      let newWidth = touch.clientX - workspaceRect.left;
+    if (logoBrand) {
+      logoBrand.addEventListener('click', () => {
+        switchMode('word', true);
+      });
+    }
 
-      const minWidth = 250;
-      const maxWidth = workspaceRect.width - 250;
-
-      if (newWidth < minWidth) newWidth = minWidth;
-      if (newWidth > maxWidth) newWidth = maxWidth;
-
-      editorCard.style.width = `${newWidth}px`;
+    // HTML 模式下的預覽/原始碼頁籤切換
+    tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetTab = btn.getAttribute('data-tab');
+        if (targetTab) {
+          activateTab(targetTab);
+        }
+      });
     });
 
-    document.addEventListener('touchend', () => {
-      if (isDragging) {
-        isDragging = false;
-        splitter.classList.remove('dragging');
-        document.body.style.userSelect = '';
-        document.body.style.webkitUserSelect = '';
+    // 編輯器輸入事件
+    if (markdownEditor) {
+      markdownEditor.addEventListener('input', () => {
+        updatePreview();
+      });
+    }
+
+    // 檔名輸入儲存事件
+    if (filenameInput) {
+      filenameInput.addEventListener('input', () => {
+        try {
+          localStorage.setItem(STORAGE_KEY_FILENAME, filenameInput.value.trim());
+        } catch (e) {}
+      });
+    }
+
+    // 實作編輯區與預覽區雙向比例同步捲動
+    let activeScrollSide = null;
+    let scrollUnlockTimer = null;
+
+    if (markdownEditor && htmlPreview) {
+      markdownEditor.addEventListener('scroll', () => {
+        if (activeScrollSide === 'preview') return;
+        activeScrollSide = 'editor';
+        const maxEditorScroll = markdownEditor.scrollHeight - markdownEditor.clientHeight;
+        if (maxEditorScroll > 0) {
+          const percentage = markdownEditor.scrollTop / maxEditorScroll;
+          const maxPreviewScroll = htmlPreview.scrollHeight - htmlPreview.clientHeight;
+          htmlPreview.scrollTop = percentage * maxPreviewScroll;
+        }
+        clearTimeout(scrollUnlockTimer);
+        scrollUnlockTimer = setTimeout(() => { activeScrollSide = null; }, 100);
+      });
+
+      htmlPreview.addEventListener('scroll', () => {
+        if (activeScrollSide === 'editor') return;
+        activeScrollSide = 'preview';
+        const maxPreviewScroll = htmlPreview.scrollHeight - htmlPreview.clientHeight;
+        if (maxPreviewScroll > 0) {
+          const percentage = htmlPreview.scrollTop / maxPreviewScroll;
+          const maxEditorScroll = markdownEditor.scrollHeight - markdownEditor.clientHeight;
+          markdownEditor.scrollTop = percentage * maxEditorScroll;
+        }
+        clearTimeout(scrollUnlockTimer);
+        scrollUnlockTimer = setTimeout(() => { activeScrollSide = null; }, 100);
+      });
+    }
+
+    // 載入範例按鈕事件 (具備覆蓋備份保護)
+    if (btnExample) {
+      btnExample.addEventListener('click', () => {
+        if (markdownEditor) {
+          if (markdownEditor.value.trim() !== '' && markdownEditor.value !== sampleMarkdown) {
+            saveUndoBackup(markdownEditor.value);
+          }
+          markdownEditor.value = sampleMarkdown;
+          updatePreview();
+          showToast('已載入預設範例！若需還原先前內容可點擊「復原內容」。', 'success');
+        }
+      });
+    }
+
+    // 清空內容按鈕事件 (具備防誤刪備份與自動聚焦)
+    if (btnClear) {
+      btnClear.addEventListener('click', () => {
+        if (markdownEditor) {
+          if (!markdownEditor.value.trim()) {
+            markdownEditor.focus();
+            return;
+          }
+          saveUndoBackup(markdownEditor.value);
+          markdownEditor.value = '';
+          updatePreview();
+          markdownEditor.focus();
+          showToast('內容已清空！若為誤觸可點擊上方「復原內容」按鈕還原。', 'success');
+        }
+      });
+    }
+
+    // 復原內容按鈕事件
+    if (btnUndo) {
+      btnUndo.addEventListener('click', () => {
+        if (markdownEditor && lastBackupContent !== null) {
+          markdownEditor.value = lastBackupContent;
+          lastBackupContent = null;
+          btnUndo.classList.add('hidden');
+          updatePreview();
+          showToast('已成功復原您先前的編輯內容！', 'success');
+        }
+      });
+    }
+
+    // 一鍵貼上剪貼簿內容事件
+    if (btnPasteMd) {
+      btnPasteMd.addEventListener('click', async () => {
+        try {
+          if (!navigator.clipboard || !navigator.clipboard.readText) {
+            throw new Error('Clipboard API not supported');
+          }
+          const clipText = await navigator.clipboard.readText();
+          if (!clipText || !clipText.trim()) {
+            showToast('剪貼簿目前沒有文字內容。', 'error');
+            return;
+          }
+          if (markdownEditor) {
+            saveUndoBackup(markdownEditor.value);
+            markdownEditor.value = clipText;
+            updatePreview();
+            showToast('已從剪貼簿貼上 Markdown 內容並完成渲染！', 'success');
+          }
+        } catch (err) {
+          if (markdownEditor) markdownEditor.focus();
+          showToast('請直接在編輯區按下 Ctrl+V (或 Cmd+V) 貼上內容。', 'error');
+        }
+      });
+    }
+
+    // 綁定複製富文本排版按鈕
+    if (btnCopyRich) {
+      btnCopyRich.addEventListener('click', copyRenderedRichText);
+    }
+    if (btnCopyRichHtml) {
+      btnCopyRichHtml.addEventListener('click', copyRenderedRichText);
+    }
+
+    // 觸發檔案上傳對話框
+    if (btnUploadTrigger && fileUpload) {
+      btnUploadTrigger.addEventListener('click', () => {
+        fileUpload.click();
+      });
+    }
+
+    // 處理檔案選擇匯入
+    if (fileUpload) {
+      fileUpload.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+          handleFileImport(file);
+        }
+        fileUpload.value = '';
+      });
+    }
+
+    // 支援將 .md / .txt 檔案直接拖放至編輯區匯入
+    if (editorCard) {
+      editorCard.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        editorCard.classList.add('drag-over');
+      });
+
+      editorCard.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        editorCard.classList.remove('drag-over');
+      });
+
+      editorCard.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        editorCard.classList.remove('drag-over');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          handleFileImport(e.dataTransfer.files[0]);
+        }
+      });
+    }
+
+    // ==========================================
+    // 功能一：導出高相容 Word (.doc)
+    // ==========================================
+    if (btnExportDoc) {
+      btnExportDoc.addEventListener('click', () => {
+        const markdownText = markdownEditor ? markdownEditor.value.trim() : '';
+        if (!markdownText) {
+          showToast('請先輸入或匯入一些 Markdown 內容再進行轉換。', 'error');
+          return;
+        }
+
+        const baseName = getCleanBaseFilename('我的轉換文件');
+        const filename = baseName + '.doc';
+
+        if (loadingOverlay) loadingOverlay.classList.add('active');
+        btnExportDoc.disabled = true;
+
+        try {
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = htmlPreview ? htmlPreview.innerHTML : '';
+
+          // 移除 .katex-mathml 節點，僅保留 .katex-html 視覺渲染結果，避免 Word 開啟時公式文字重複
+          const katexMathMLs = tempDiv.querySelectorAll('.katex-mathml');
+          katexMathMLs.forEach(el => el.remove());
+
+          const innerHtml = tempDiv.innerHTML;
+          const safeTitle = escapeHtml(baseName);
+
+          // 加入 <w:WordDocument><w:View>Print</w:View></w:WordDocument> 強制 Word 以標準 A4 整頁模式開啟
+          const fullHtmlString = `
+            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+            <head>
+              <meta charset="utf-8">
+              <title>${safeTitle}</title>
+              <!--[if gte mso 9]>
+              <xml>
+                <w:WordDocument>
+                  <w:View>Print</w:View>
+                  <w:Zoom>100</w:Zoom>
+                  <w:DoNotOptimizeForBrowser/>
+                </w:WordDocument>
+              </xml>
+              <![endif]-->
+              <style>
+                @page WordSection1 {
+                  size: 595.3pt 841.9pt;
+                  margin: 72.0pt 72.0pt 72.0pt 72.0pt;
+                  mso-header-margin: 35.4pt;
+                  mso-footer-margin: 35.4pt;
+                  mso-paper-source: 0;
+                }
+                div.WordSection1 {
+                  page: WordSection1;
+                }
+                body {
+                  font-family: 'Times New Roman', 'Microsoft JhengHei', 'PMingLiU', 'Segoe UI Symbol', 'Arial Unicode MS', serif;
+                  font-size: 12pt;
+                  line-height: 1.6;
+                  color: #000000;
+                }
+                h1 {
+                  font-size: 20pt;
+                  font-weight: bold;
+                  margin-top: 18pt;
+                  margin-bottom: 6pt;
+                  color: #2c3e50;
+                  border-bottom: 2px solid #3b82f6;
+                  padding-bottom: 3pt;
+                }
+                h2 {
+                  font-size: 16pt;
+                  font-weight: bold;
+                  margin-top: 14pt;
+                  margin-bottom: 4pt;
+                  color: #34495e;
+                }
+                h3 {
+                  font-size: 14pt;
+                  font-weight: bold;
+                  margin-top: 12pt;
+                  margin-bottom: 4pt;
+                }
+                p {
+                  margin-top: 0;
+                  margin-bottom: 8pt;
+                  text-align: justify;
+                }
+                blockquote {
+                  margin-top: 0;
+                  margin-bottom: 8pt;
+                  margin-left: 20pt;
+                  margin-right: 20pt;
+                  padding-left: 10pt;
+                  border-left: 3pt solid #8b5cf6;
+                  color: #555555;
+                  font-style: italic;
+                }
+                ul, ol {
+                  margin-top: 0;
+                  margin-bottom: 8pt;
+                  padding-left: 20pt;
+                }
+                li {
+                  margin-bottom: 3pt;
+                }
+                code {
+                  font-family: 'Courier New', monospace;
+                  font-size: 10pt;
+                  background-color: #f1f5f9;
+                  padding: 1pt 3pt;
+                }
+                pre {
+                  font-family: 'Courier New', monospace;
+                  font-size: 10pt;
+                  background-color: #f1f5f9;
+                  padding: 8pt;
+                  border: 1pt solid #cbd5e1;
+                  margin-bottom: 8pt;
+                  white-space: pre-wrap;
+                }
+                table {
+                  width: 100%;
+                  border-collapse: collapse;
+                  margin-bottom: 8pt;
+                }
+                th, td {
+                  border: 1pt solid #cbd5e1;
+                  padding: 6pt;
+                  font-size: 10.5pt;
+                }
+                th {
+                  background-color: #f1f5f9;
+                  font-weight: bold;
+                }
+                hr {
+                  border: none;
+                  border-top: 1px solid #cbd5e1;
+                  margin-top: 14pt;
+                  margin-bottom: 14pt;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="WordSection1">
+                ${innerHtml}
+              </div>
+            </body>
+            </html>
+          `;
+
+          // 將非 ASCII 字元轉為 HTML 實體避免任何 Word 版本亂碼
+          const encodedHtml = fullHtmlString.replace(/[^\x00-\x7F]/g, function(c) {
+            return '&#' + c.charCodeAt(0) + ';';
+          });
+
+          const blob = new Blob([encodedHtml], { type: 'application/msword;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const downloadLink = document.createElement('a');
+          downloadLink.href = url;
+          downloadLink.download = filename;
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          document.body.removeChild(downloadLink);
+          setTimeout(() => URL.revokeObjectURL(url), 100);
+
+          showToast(`Word 檔案 (${filename}) 導出成功！`, 'success');
+        } catch (error) {
+          console.error('導出 Word 失敗:', error);
+          showToast(`導出失敗: ${error.message}`, 'error');
+        } finally {
+          if (loadingOverlay) loadingOverlay.classList.remove('active');
+          btnExportDoc.disabled = false;
+        }
+      });
+    }
+
+    // ==========================================
+    // 功能二：複製與導出 HTML (.html)
+    // ==========================================
+    if (btnCopyHtml) {
+      btnCopyHtml.addEventListener('click', () => {
+        const htmlText = htmlCodeTextarea ? htmlCodeTextarea.value.trim() : '';
+        if (!htmlText) {
+          showToast('目前沒有可複製的 HTML 原始碼。', 'error');
+          return;
+        }
+
+        navigator.clipboard.writeText(htmlText).then(() => {
+          showToast('HTML 原始碼已成功複製到剪貼簿！', 'success');
+        }).catch(err => {
+          showToast('複製失敗，請手動複製。', 'error');
+          console.error(err);
+        });
+      });
+    }
+
+    if (btnExportHtml) {
+      btnExportHtml.addEventListener('click', () => {
+        const markdownText = markdownEditor ? markdownEditor.value.trim() : '';
+        if (!markdownText) {
+          showToast('請先輸入或匯入一些 Markdown 內容再進行轉換。', 'error');
+          return;
+        }
+
+        const baseName = getCleanBaseFilename('我的轉換網頁');
+        const filename = baseName + '.html';
+
+        if (loadingOverlay) loadingOverlay.classList.add('active');
+        btnExportHtml.disabled = true;
+
+        try {
+          const innerHtml = parseMarkdownWithMathProtection(markdownText);
+          
+          const scriptOpenTag = '<script>';
+          const scriptCloseTag = '</' + 'script>';
+          const safeTitle = escapeHtml(baseName);
+
+          const fullHtml = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${safeTitle}</title>
+  
+  <!-- 引入 KaTeX 樣式與腳本 (用於導出文件中的公式自動渲染) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js">${scriptCloseTag}
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js">${scriptCloseTag}
+  
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Microsoft JhengHei";
+      line-height: 1.7;
+      color: #334155;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem;
+      background-color: #ffffff;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      color: #0f172a;
+      margin-top: 1.8em;
+      margin-bottom: 0.8em;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+    h1 { font-size: 2.25em; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
+    h2 { font-size: 1.75em; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
+    h3 { font-size: 1.5em; }
+    p { margin-top: 0; margin-bottom: 1.25rem; text-align: justify; }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    blockquote {
+      border-left: 4px solid #7c3aed;
+      color: #475569;
+      margin: 0 0 1.25rem 0;
+      padding: 0.75rem 1.25rem;
+      background: #f8fafc;
+      border-radius: 0 6px 6px 0;
+    }
+    code {
+      background-color: #f1f5f9;
+      padding: 0.2em 0.4em;
+      border-radius: 4px;
+      font-family: monospace;
+      color: #db2777;
+      font-size: 90%;
+    }
+    pre {
+      background-color: #f1f5f9;
+      padding: 1rem;
+      overflow: auto;
+      border-radius: 8px;
+      margin-bottom: 1.25rem;
+      border: 1px solid #e2e8f0;
+    }
+    pre code { background: none; padding: 0; color: #0f172a; font-size: 100%; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 1.25rem; }
+    th, td { border: 1px solid #e2e8f0; padding: 8px 14px; text-align: left; }
+    th { background: #f1f5f9; font-weight: 600; }
+    tr:nth-child(2n) { background: #f8fafc; }
+    hr { border: none; border-top: 1px solid #e2e8f0; margin: 2rem 0; }
+  </style>
+</head>
+<body>
+  ${innerHtml}
+  
+  ${scriptOpenTag}
+    document.addEventListener("DOMContentLoaded", function() {
+      if (typeof renderMathInElement === 'function') {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\\\(', right: '\\\\)', display: false },
+            { left: '\\\\[', right: '\\\\]', display: true }
+          ],
+          throwOnError: false
+        });
       }
     });
+  ${scriptCloseTag}
+</body>
+</html>`;
+
+          const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const downloadLink = document.createElement('a');
+          downloadLink.href = url;
+          downloadLink.download = filename;
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          document.body.removeChild(downloadLink);
+          setTimeout(() => URL.revokeObjectURL(url), 100);
+
+          showToast(`獨立 HTML 檔案 (${filename}) 導出成功！`, 'success');
+        } catch (error) {
+          console.error('導出 HTML 失敗:', error);
+          showToast(`導出失敗: ${error.message}`, 'error');
+        } finally {
+          if (loadingOverlay) loadingOverlay.classList.remove('active');
+          btnExportHtml.disabled = false;
+        }
+      });
+    }
+
+    // ==========================================
+    // 功能三：導出 PDF (.pdf)
+    // ==========================================
+    if (btnExportPdf) {
+      btnExportPdf.addEventListener('click', () => {
+        const markdownText = markdownEditor ? markdownEditor.value.trim() : '';
+        if (!markdownText) {
+          showToast('請先輸入或匯入一些 Markdown 內容再進行轉換。', 'error');
+          return;
+        }
+
+        const baseName = getCleanBaseFilename('我的轉換文件');
+
+        const originalTitle = document.title;
+        document.title = baseName;
+
+        showToast('正在開啟列印視窗，請將目的地選擇為「另存為 PDF」...', 'success');
+
+        setTimeout(() => {
+          window.print();
+          document.title = originalTitle;
+        }, 450);
+      });
+    }
+
+    // ==========================================
+    // 實作左右拖曳調整視窗大小功能 (Splitter)
+    // ==========================================
+    if (splitter && editorCard) {
+      const workspace = splitter.parentElement;
+      let isDragging = false;
+
+      splitter.addEventListener('mousedown', () => {
+        isDragging = true;
+        splitter.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        document.body.style.webkitUserSelect = 'none';
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isDragging || !workspace) return;
+        const workspaceRect = workspace.getBoundingClientRect();
+        let newWidth = e.clientX - workspaceRect.left;
+
+        const minWidth = 250;
+        const maxWidth = workspaceRect.width - 250;
+
+        if (newWidth < minWidth) newWidth = minWidth;
+        if (newWidth > maxWidth) newWidth = maxWidth;
+
+        editorCard.style.width = `${newWidth}px`;
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
+          splitter.classList.remove('dragging');
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+          document.body.style.webkitUserSelect = '';
+        }
+      });
+
+      // 觸控裝置支援
+      splitter.addEventListener('touchstart', () => {
+        isDragging = true;
+        splitter.classList.add('dragging');
+        document.body.style.userSelect = 'none';
+        document.body.style.webkitUserSelect = 'none';
+      }, { passive: true });
+
+      document.addEventListener('touchmove', (e) => {
+        if (!isDragging || !workspace || !e.touches[0]) return;
+        const touch = e.touches[0];
+        const workspaceRect = workspace.getBoundingClientRect();
+        let newWidth = touch.clientX - workspaceRect.left;
+
+        const minWidth = 250;
+        const maxWidth = workspaceRect.width - 250;
+
+        if (newWidth < minWidth) newWidth = minWidth;
+        if (newWidth > maxWidth) newWidth = maxWidth;
+
+        editorCard.style.width = `${newWidth}px`;
+      }, { passive: true });
+
+      document.addEventListener('touchend', () => {
+        if (isDragging) {
+          isDragging = false;
+          splitter.classList.remove('dragging');
+          document.body.style.userSelect = '';
+          document.body.style.webkitUserSelect = '';
+        }
+      });
+    }
   </script>
 </body>
 </html>

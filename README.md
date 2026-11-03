@@ -11,7 +11,8 @@
 2. **Markdown 轉 HTML**（網址 `#html`）：適合內容包含複雜數學公式，或需要轉換為網頁程式碼、發布為獨立網頁（`.html`）的場景。
 3. **Markdown 轉 PDF**（網址 `#pdf`）：適合需要將 Markdown 文件直接轉換為標準可攜式 PDF 檔案（`.pdf`）的場景。
 
-> **離線單檔使用說明**：若您處於無網路或高機密環境，只需從 GitHub 下載單一檔案 `index.html`，直接以瀏覽器開啟即可使用全部三種轉換功能。舊版分頁網址（`markdown-to-html.html` 與 `markdown-to-pdf.html`）已設為自動重新導向 stub，確保既有書籤正常運作。
+> **完全無網路（離線環境）部署與使用說明**：
+> 本專案已將所有解析引擎（`marked.umd.js`、`purify.min.js`、`katex.min.js`、`katex.min.css` 與全套 20 個數學公式專用字型檔）完整打包於本地的 `vendor/` 資料夾中。若要在完全沒有網路的隔離電腦上使用，請將 **`index.html` 與 `vendor/` 資料夾** 一起複製到目標電腦的同一個資料夾下，直接雙擊開啟 `index.html` 即可 100% 離線運作。
 
 ---
 

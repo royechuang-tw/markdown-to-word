@@ -6,21 +6,18 @@
   <title>MarkWord — Markdown 轉 Word / HTML / PDF 線上轉換工具</title>
   <meta name="description" content="一個純前端的 Markdown 轉 Word (.doc)、HTML 與 PDF 線上轉換工具。支援即時預覽、KaTeX 數學公式渲染、檔案匯入，無需上傳伺服器，安全且高效。">
   
-  <!-- 引入 Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <!-- 本地離線字型與備援系統字型 (完全不依賴外部 Google Fonts CDN，確保無網路環境秒開) -->
   
-  <!-- 引入 Marked.js (Markdown 解析器) -->
-  <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
+  <!-- 引入本地 Marked.js (Markdown 解析器) -->
+  <script src="vendor/marked.umd.js"></script>
 
-  <!-- 引入 DOMPurify (防範 XSS 攻擊) -->
-  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+  <!-- 引入本地 DOMPurify (防範 XSS 攻擊) -->
+  <script src="vendor/purify.min.js"></script>
 
-  <!-- 引入 KaTeX (數學公式即時渲染) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+  <!-- 引入本地 KaTeX (數學公式即時渲染與字型) -->
+  <link rel="stylesheet" href="vendor/katex.min.css">
+  <script src="vendor/katex.min.js"></script>
+  <script src="vendor/auto-render.min.js"></script>
 
   <style>
     html {
@@ -2084,10 +2081,8 @@ function exportDocument(mode, content) {
         btnExportHtml.disabled = true;
 
         try {
-          const innerHtml = parseMarkdownWithMathProtection(markdownText);
-          
-          const scriptOpenTag = '<script>';
-          const scriptCloseTag = '</' + 'script>';
+          // 直接取用預覽區已經由本地 KaTeX 渲染完成的 DOM 內容，並附上本地與 CDN 雙重樣式表，確保導出的 HTML 在完全無網路電腦也能顯示排版好的數學公式
+          const renderedHtml = htmlPreview ? htmlPreview.innerHTML : parseMarkdownWithMathProtection(markdownText);
           const safeTitle = escapeHtml(baseName);
 
           const fullHtml = `<!DOCTYPE html>
@@ -2097,10 +2092,9 @@ function exportDocument(mode, content) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${safeTitle}</title>
   
-  <!-- 引入 KaTeX 樣式與腳本 (用於導出文件中的公式自動渲染) -->
+  <!-- 優先載入同目錄 vendor 本地樣式，若移動至其他位置則自動備援使用 CDN -->
+  <link rel="stylesheet" href="vendor/katex.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js">${scriptCloseTag}
-  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js">${scriptCloseTag}
   
   <style>
     body {
@@ -2158,23 +2152,7 @@ function exportDocument(mode, content) {
   </style>
 </head>
 <body>
-  ${innerHtml}
-  
-  ${scriptOpenTag}
-    document.addEventListener("DOMContentLoaded", function() {
-      if (typeof renderMathInElement === 'function') {
-        renderMathInElement(document.body, {
-          delimiters: [
-            { left: '$$', right: '$$', display: true },
-            { left: '$', right: '$', display: false },
-            { left: '\\\\(', right: '\\\\)', display: false },
-            { left: '\\\\[', right: '\\\\]', display: true }
-          ],
-          throwOnError: false
-        });
-      }
-    });
-  ${scriptCloseTag}
+  ${renderedHtml}
 </body>
 </html>`;
 
